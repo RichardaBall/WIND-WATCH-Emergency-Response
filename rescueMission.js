@@ -74,7 +74,7 @@ export class RescueMission {
         this._initFallbackMesh();
         this._preloadLiferaft();
         
-        const initialDelay = 120000 + Math.random() * 180000;
+        const initialDelay = 10000 + Math.random() * 20000;
         setTimeout(() => {
             this.startMission();
         }, initialDelay);
@@ -131,7 +131,7 @@ export class RescueMission {
         div.id = 'rescue-pager-panel';
         div.style.cssText = `
             position: fixed;
-            bottom: 175px;
+            bottom: 193px;
             right: 20px;
             width: 170px;
             background: linear-gradient(135deg, #282a2d, #191a1c);
