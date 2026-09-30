@@ -3,6 +3,66 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
+function optimizeAndWarmUpGltf(gltfScene, renderer = null, mixer = null) {
+    const activeRenderer = renderer || window.renderer || null;
+    const activeCamera = window.camera || new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+
+    const prevVisible = gltfScene.visible;
+    gltfScene.visible = true;
+
+    if (mixer) {
+        mixer.update(0.016);
+    }
+
+    gltfScene.traverse((child) => {
+        if (child.isMesh || child.isSkinnedMesh) {
+            child.frustumCulled = false;
+            child.updateMatrixWorld(true);
+            
+            if (child.skeleton) {
+                child.skeleton.update();
+            }
+
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    const mapKeys = ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'emissiveMap', 'aoMap', 'alphaMap'];
+                    mapKeys.forEach(key => {
+                        if (mat[key]) {
+                            mat[key].generateMipmaps = false;
+                            mat[key].minFilter = THREE.LinearFilter;
+                            mat[key].needsUpdate = true;
+                            if (activeRenderer && typeof activeRenderer.initTexture === 'function') {
+                                activeRenderer.initTexture(mat[key]);
+                            }
+                        }
+                    });
+                    mat.needsUpdate = true;
+                });
+            }
+        }
+    });
+
+    if (activeRenderer) {
+        // Force GPU texture initialization and shader compilation
+        gltfScene.traverse((child) => {
+            if (child.isMesh && child.material) {
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach(mat => {
+                    ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'emissiveMap', 'aoMap', 'alphaMap'].forEach(k => {
+                        if (mat[k]) {
+                            activeRenderer.initTexture(mat[k]);
+                        }
+                    });
+                });
+            }
+        });
+        activeRenderer.compile(gltfScene, activeCamera);
+    }
+
+    gltfScene.visible = prevVisible;
+}
+
 export const SurvivorState = {
     IDLE: 'IDLE',
     ON_RAFT: 'ON_RAFT',
@@ -19,7 +79,6 @@ export class Survivor {
         this.loadingManager = loadingManager;
         this.renderer = renderer;
         
-        // Separate meshes, mixers, and actions for each distinct GLB model file (wavinghelp removed)
         this.meshes = {
             raising: null,
             wavingbye: null
@@ -38,14 +97,12 @@ export class Survivor {
         this.currentAction = null;
         this.currentState = SurvivorState.IDLE;
         
-        // Character physical parameters scaled up by 25% (1.75m * 1.25 = ~2.1875m base target height)
         this.targetHeight = 1.75 * 1.25;  
-        this.fadeDuration = 2.5;   // Opacity fade-out duration in seconds
+        this.fadeDuration = 2.5;   
         this.fadeTimer = 0;
         this.isFading = false;
-        this.handOffset = 0.55 * 1.25;    // Scaled vertical distance from winch hook
+        this.handOffset = 0.55 * 1.25;    
 
-        // Position memory for lazy-loading support
         this.raftPosition = null;
         this.raftRotationY = 0;
         this.pendingDisembarkPos = null;
@@ -54,23 +111,16 @@ export class Survivor {
         this.pendingAutoFade = true;
     }
 
-    /**
-     * Loads character meshes and animation clips from individual GLB files in the main game folder.
-     * @param {Object} files Object mapping clip names to GLB file URLs.
-     * @param {THREE.WebGLRenderer} renderer Optional WebGLRenderer for KTX2 texture support detection.
-     */
     async loadModels(files = {
         raising: 'raising.glb',
         wavingbye: 'wavingbye.glb'
     }, renderer = null) {
         const loader = this.loadingManager ? new GLTFLoader(this.loadingManager) : new GLTFLoader();
 
-        // Initialize and configure DRACOLoader for compressed GLB meshes
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
 
-        // Initialize and configure KTX2Loader for compressed KTX2 / Basis Universal textures
         const ktx2Loader = new KTX2Loader(this.loadingManager);
         ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
         const activeRenderer = renderer || this.renderer || window.renderer;
@@ -129,7 +179,15 @@ export class Survivor {
                 if (!gltf) return null;
                 const mesh = gltf.scene;
 
-                // Force world matrix calculation on skinned mesh before bounding box measurement
+                const mixer = new THREE.AnimationMixer(mesh);
+                let action = null;
+                if (gltf.animations && gltf.animations.length > 0) {
+                    action = mixer.clipAction(gltf.animations[0]);
+                    action.play();
+                }
+
+                optimizeAndWarmUpGltf(mesh, activeRenderer, mixer);
+
                 mesh.updateMatrixWorld(true);
                 const bbox = new THREE.Box3().setFromObject(mesh);
                 const size = new THREE.Vector3();
@@ -142,7 +200,6 @@ export class Survivor {
                     mesh.scale.set(1.25, 1.25, 1.25);
                 }
 
-                // Enable shadows and transparent material blending for smooth fade-outs
                 mesh.traverse((child) => {
                     if (child.isMesh) {
                         child.castShadow = true;
@@ -166,13 +223,6 @@ export class Survivor {
                     }
                 });
 
-                // Initialize Three.js AnimationMixer on the character mesh
-                const mixer = new THREE.AnimationMixer(mesh);
-                let action = null;
-                if (gltf.animations && gltf.animations.length > 0) {
-                    action = mixer.clipAction(gltf.animations[0]);
-                }
-
                 mesh.visible = false;
                 this.scene.add(mesh);
 
@@ -185,7 +235,6 @@ export class Survivor {
             processGltf(raisingGltf, 'raising');
             processGltf(wavingbyeGltf, 'wavingbye');
 
-            // Fallbacks for any missing model files
             const fallbackMesh = this.meshes['raising'] || this.meshes['wavingbye'];
             const fallbackMixer = this.mixers['raising'] || this.mixers['wavingbye'];
             const fallbackAction = this.actions['raising'] || this.actions['wavingbye'];
@@ -197,6 +246,8 @@ export class Survivor {
 
             if (this.currentState === SurvivorState.DISEMBARKING || this.currentState === SurvivorState.WAVING) {
                 this.disembarkNextToHelicopter(this.pendingDisembarkPos, this.pendingHeliRotY, this.pendingDeckY, this.pendingAutoFade);
+            } else if (this.currentState === SurvivorState.ON_RAFT && this.raftPosition) {
+                this.spawnOnRaft(this.raftPosition, this.raftRotationY);
             }
 
             return true;
@@ -206,10 +257,6 @@ export class Survivor {
         }
     }
 
-    /**
-     * Sets opacity across all sub-materials on all loaded survivor meshes.
-     * @param {number} val Opacity value (0.0 to 1.0)
-     */
     setOpacity(val) {
         Object.values(this.meshes).forEach(mesh => {
             if (!mesh) return;
@@ -231,12 +278,7 @@ export class Survivor {
         });
     }
 
-    /**
-     * Activates the specified model key, hiding all others and playing its animation.
-     * @param {string} key 'raising' or 'wavingbye'
-     * @param {boolean} loop Whether animation loops continuously
-     */
-    setActiveModel(key, loop = true) {
+    setActiveModel(key, loop = true, playImmediately = true) {
         Object.keys(this.meshes).forEach(k => {
             if (this.meshes[k]) {
                 this.meshes[k].visible = false;
@@ -253,21 +295,22 @@ export class Survivor {
 
         if (nextAction && this.mixer) {
             this.mixer.stopAllAction();
-            nextAction
-                .reset()
-                .setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce)
-                .setEffectiveTimeScale(1)
-                .setEffectiveWeight(1)
-                .play();
+            if (playImmediately) {
+                nextAction
+                    .reset()
+                    .setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce)
+                    .setEffectiveTimeScale(1)
+                    .setEffectiveWeight(1)
+                    .play();
 
-            nextAction.clampWhenFinished = !loop;
+                nextAction.clampWhenFinished = !loop;
+            }
             this.currentAction = nextAction;
         } else {
             this.currentAction = null;
         }
     }
 
-    // Step 1: Survivor is now part of liferaft.glb; set state to ON_RAFT
     spawnOnRaft(raftPosition, raftRotationY = 0) {
         this.raftPosition = raftPosition.clone();
         this.raftRotationY = raftRotationY;
@@ -276,27 +319,28 @@ export class Survivor {
         this.fadeTimer = 0;
         this.setOpacity(1.0);
 
-        Object.keys(this.meshes).forEach(k => {
-            if (this.meshes[k]) {
-                this.meshes[k].visible = false;
-            }
-        });
-        this.mesh = null;
+        // Make raising model visible on the raft so GPU shaders and textures are fully active and pre-warmed,
+        // but pass playImmediately = false so the animation doesn't play and move the survivor off the raft.
+        this.setActiveModel('raising', false, false);
+        if (this.mesh) {
+            this.mesh.visible = true;
+            this.mesh.position.copy(this.raftPosition);
+            this.mesh.rotation.y = this.raftRotationY;
+        }
     }
 
-    // Step 2: Hook hits raft — raft vanishes, survivor attaches to winch line raising (raising.glb)
     attachToWinch() {
         this.currentState = SurvivorState.WINCHING;
         this.isFading = false;
         this.fadeTimer = 0;
         this.setOpacity(1.0);
 
-        this.setActiveModel('raising', true);
+        // Now start playing the raising animation since the winch has grabbed the survivor
+        this.setActiveModel('raising', false, true);
         if (!this.mesh) return;
         this.mesh.visible = true;
     }
 
-    // Step 3: Winch fully retracted — survivor vanishes inside cabin ("onboard")
     enterCabin() {
         this.currentState = SurvivorState.IN_CABIN;
         Object.values(this.meshes).forEach(m => {
@@ -304,7 +348,6 @@ export class Survivor {
         });
     }
 
-    // Step 4: Helicopter landed at main base with all systems off — survivor appears at calibrated coordinates waving goodbye (wavingbye.glb)
     disembarkNextToHelicopter(posOrHeliPos = { x: 5.869, y: 6.236, z: 1.4548 }, helicopterRotationY = 0, deckY = null, autoFade = true) {
         this.currentState = SurvivorState.DISEMBARKING;
         this.pendingDisembarkPos = posOrHeliPos;
@@ -316,7 +359,7 @@ export class Survivor {
         this.isFading = false;
         this.fadeTimer = 0;
 
-        this.setActiveModel('wavingbye', true);
+        this.setActiveModel('wavingbye', true, true);
         if (!this.mesh) return;
 
         if (posOrHeliPos && typeof posOrHeliPos === 'object' && ('x' in posOrHeliPos) && ('z' in posOrHeliPos) && !posOrHeliPos.isVector3) {
@@ -360,11 +403,6 @@ export class Survivor {
         }
     }
 
-    /**
-     * Frame update loop called inside main game loop.
-     * @param {number} deltaTime Time step in seconds
-     * @param {THREE.Vector3} hookPosition Current world position of winch hook
-     */
     update(deltaTime, hookPosition = null) {
         Object.values(this.mixers).forEach(mixer => {
             if (mixer) {
@@ -385,11 +423,17 @@ export class Survivor {
         }
 
         switch (this.currentState) {
+            case SurvivorState.ON_RAFT:
+                if (this.mesh && this.raftPosition) {
+                    this.mesh.position.copy(this.raftPosition);
+                }
+                break;
             case SurvivorState.WINCHING:
                 if (hookPosition && this.mesh && this.mesh.visible) {
                     this.mesh.position.copy(hookPosition);
                     this.mesh.position.y -= this.handOffset;
                 }
+                break;
         }
     }
 }

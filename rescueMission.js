@@ -4,10 +4,46 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { WinchSystem } from './winch.js';
 import { Survivor, SurvivorState } from './survivor.js';
 
+function optimizeAndWarmUpGltf(gltfScene) {
+    const activeRenderer = window.renderer || null;
+    const activeCamera = window.camera || new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+
+    gltfScene.traverse((child) => {
+        if (child.isMesh) {
+            child.frustumCulled = false;
+            child.updateMatrixWorld(true);
+
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    const mapKeys = ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'emissiveMap', 'aoMap', 'alphaMap'];
+                    mapKeys.forEach(key => {
+                        if (mat[key]) {
+                            mat[key].generateMipmaps = false;
+                            mat[key].minFilter = THREE.LinearFilter;
+                            mat[key].needsUpdate = true;
+                            if (activeRenderer && typeof activeRenderer.initTexture === 'function') {
+                                activeRenderer.initTexture(mat[key]);
+                            }
+                        }
+                    });
+                    mat.needsUpdate = true;
+                });
+            }
+        }
+    });
+
+    if (activeRenderer) {
+        // Force WebGL shader compilation and GPU buffer upload immediately on load
+        activeRenderer.compile(gltfScene, activeCamera);
+    }
+}
+
 export class RescueMission {
-    constructor(scene, loadingManager) {
+    constructor(scene, loadingManager, mainBase = null) {
         this.scene = scene;
         this.loadingManager = loadingManager;
+        this.mainBase = mainBase;
         
         this.state = 'IDLE'; // IDLE, ACTIVE, ON_SCENE, WINCHING, RETURNING, DISEMBARKING, COMPLETED
         this.raftMesh = null;
@@ -18,11 +54,10 @@ export class RescueMission {
         this.rescueFreq = 270.0;
         this.raftTemplate = null;
         this.raftMixer = null;
-        this.raftAnimations = [];
         this.isRaftLoading = false;
         this.usingFallback = false;
         
-        this.winchSystem = new WinchSystem(scene);
+        this.winchSystem = new WinchSystem(scene, loadingManager);
         this.survivor = new Survivor(scene, loadingManager);
         this.survivor.loadModels();
         
@@ -39,8 +74,7 @@ export class RescueMission {
         this._initFallbackMesh();
         this._preloadLiferaft();
         
-        // Updated initial delay: 2 to 5 minutes (120,000ms - 300,000ms)
-        const initialDelay = 120000 + Math.random() * 180000;
+        const initialDelay = 10000 + Math.random() * 10000;
         setTimeout(() => {
             this.startMission();
         }, initialDelay);
@@ -57,13 +91,17 @@ export class RescueMission {
 
     _preloadLiferaft() {
         this.isRaftLoading = true;
-        const loader = this.loadingManager ? new GLTFLoader(this.loadingManager) : new GLTFLoader();
+        const manager = (this.loadingManager && typeof this.loadingManager.itemStart === 'function') 
+            ? this.loadingManager 
+            : THREE.DefaultLoadingManager;
+        const loader = new GLTFLoader(manager);
         
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
 
         loader.load('liferaft.glb', (gltf) => {
+            optimizeAndWarmUpGltf(gltf.scene);
             this.raftTemplate = gltf.scene;
             this.raftTemplate.scale.set(2.0, 2.0, 2.0);
             this.raftTemplate.position.set(0, -9999, 0);
@@ -231,6 +269,10 @@ export class RescueMission {
     }
 
     update(delta, helicopterPlayer, mainBase) {
+        if (mainBase && !this.mainBase) {
+            this.mainBase = mainBase;
+        }
+
         if (this.winchSystem) {
             this.winchSystem.update(delta, helicopterPlayer);
         }
@@ -312,7 +354,9 @@ export class RescueMission {
         }
 
         if (this.state === 'RETURNING' && helicopterPlayer && helicopterPlayer.model) {
-            const spawnPos = (mainBase && mainBase.getSpawnPosition) ? mainBase.getSpawnPosition() : new THREE.Vector3(3.3690, 6.2360, 0.4548);
+            const spawnPos = (this.mainBase && typeof this.mainBase.getSpawnPosition === 'function') 
+                ? this.mainBase.getSpawnPosition() 
+                : new THREE.Vector3(3.3690, 6.2360, 0.4548);
             const horizDist = Math.hypot(heliPos.x - spawnPos.x, heliPos.z - spawnPos.z);
             const vertDist = Math.abs(heliPos.y - spawnPos.y);
 
@@ -362,8 +406,7 @@ export class RescueMission {
                 this.flashingLight.intensity = 0;
             }
 
-            // Updated respawn delay after mission completion also set to 2 to 5 minutes
-            const randomDelay = 120000 + Math.random() * 180000;
+            const randomDelay = 10000 + Math.random() * 10000;
             setTimeout(() => {
                 this.state = 'IDLE';
                 this.startMission();

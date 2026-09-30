@@ -2,6 +2,40 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
+function optimizeAndWarmUpGltf(gltfScene) {
+    const activeRenderer = window.renderer || null;
+    const activeCamera = window.camera || new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+
+    gltfScene.traverse((child) => {
+        if (child.isMesh) {
+            child.frustumCulled = false;
+            child.updateMatrixWorld(true);
+
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    const mapKeys = ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'emissiveMap', 'aoMap', 'alphaMap'];
+                    mapKeys.forEach(key => {
+                        if (mat[key]) {
+                            mat[key].generateMipmaps = false;
+                            mat[key].minFilter = THREE.LinearFilter;
+                            mat[key].needsUpdate = true;
+                            if (activeRenderer && typeof activeRenderer.initTexture === 'function') {
+                                activeRenderer.initTexture(mat[key]);
+                            }
+                        }
+                    });
+                    mat.needsUpdate = true;
+                });
+            }
+        }
+    });
+
+    if (activeRenderer) {
+        activeRenderer.compile(gltfScene, activeCamera);
+    }
+}
+
 export class LiferaftManager {
     constructor(scene, loadingManager = null) {
         this.scene = scene;
@@ -12,7 +46,6 @@ export class LiferaftManager {
 
         this.mixer = null;
 
-        // Create Restart Button DOM Element positioned at the top center with transparent background
         this.restartBtn = document.createElement('button');
         this.restartBtn.id = 'restart-flight-btn';
         this.restartBtn.innerHTML = 'RESTART FLIGHT';
@@ -56,9 +89,11 @@ export class LiferaftManager {
 
         document.body.appendChild(this.restartBtn);
 
-        // Load the custom liferaft.glb model using loadingManager for preloading
-        const loader = loadingManager ? new GLTFLoader(loadingManager) : new GLTFLoader();
-        
+        const manager = (loadingManager && typeof loadingManager.itemStart === 'function') 
+            ? loadingManager 
+            : THREE.DefaultLoadingManager;
+
+        const loader = new GLTFLoader(manager);
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
@@ -66,6 +101,7 @@ export class LiferaftManager {
         loader.load(
             './liferaft.glb',
             (gltf) => {
+                optimizeAndWarmUpGltf(gltf.scene);
                 const model = gltf.scene;
                 model.scale.set(1, 1, 1);
                 this.raftGroup.add(model);
@@ -112,7 +148,6 @@ export class LiferaftManager {
             this.mixer.update(delta);
         }
 
-        // Add a gentle bobbing motion on the water waves
         const time = Date.now() * 0.002;
         this.raftGroup.position.y = Math.sin(time) * 0.15;
         this.raftGroup.rotation.z = Math.cos(time * 0.7) * 0.03;

@@ -1,5 +1,7 @@
 - Heli Rotor sync stutter
 - Search light automation, comes on at night when near the helipad and locks onto centre of helipad. Also comes on when rescue mission at night and locks onto liferaft. 
--Performance, load all models to memory, lag issues fix. Load rescue missions in before arriving at them. Look at what worked for WTG and apply to rescue missions.
 - Sounds
-- start game full screen mode
+- Lights
+- Incentive/gameplay, money system, needed to refuel, re-water. Money loss when WTG burning, incentive to put out fire. Also extra income for survivor rescues.
+
+
