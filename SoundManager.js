@@ -155,6 +155,33 @@ export class SoundManager {
         this.playToggleSwitchSound(isOn);
     }
 
+    // Synthesizes a crisp rotary click for radio frequency tuning steps (10 kHz)
+    playRadioClickSound() {
+        try {
+            this.ensureContextRunning();
+            if (!this.audioCtx || this.isMuted) return;
+
+            const now = this.audioCtx.currentTime;
+            const osc = this.audioCtx.createOscillator();
+            const gain = this.audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(2400, now);
+            osc.frequency.exponentialRampToValueAtTime(800, now + 0.015);
+
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.015);
+
+            osc.connect(gain);
+            gain.connect(this.masterGain);
+
+            osc.start(now);
+            osc.stop(now + 0.015);
+        } catch (e) {
+            console.warn("Radio click sound error:", e);
+        }
+    }
+
     // Synthesizes high-pressure fuel pump motor spooling & priming sound
     playFuelPumpPrimeSound() {
         try {

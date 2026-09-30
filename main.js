@@ -99,7 +99,7 @@ window.addEventListener('DOMContentLoaded', () => {
         btnLight.addEventListener('click', () => {
             if (inputManager) {
                 inputManager.landingLightOn = !inputManager.landingLightOn;
-                if (soundManager) soundManager.playElectricalClick();
+                if (soundManager) soundManager.playToggleSwitchSound(inputManager.landingLightOn);
             }
         });
     }
@@ -230,7 +230,7 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
     const mixer = new THREE.AnimationMixer(model);
     helicopterPlayer = new HelicopterPlayer(model, gltfHeli.animations, mixer, soundManager);
 
-    navRadio = new NavRadio(helicopterPlayer, spawnPosition);
+    navRadio = new NavRadio(helicopterPlayer, spawnPosition, soundManager);
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
 
     developerTool = new DeveloperTool(weatherSystem, windFarm, mainBase, helicopterPlayer, camera, renderer, rescueMission ? rescueMission.winchSystem : null);

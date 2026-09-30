@@ -5,8 +5,9 @@
 import * as THREE from 'three';
 
 export class NavRadio {
-    constructor(player, rigAlphaPosition) {
+    constructor(player, rigAlphaPosition, soundManager) {
         this.player = player;
+        this.soundManager = soundManager;
         this.powered = true;
         window.navRadio = this;
 
@@ -201,6 +202,10 @@ export class NavRadio {
 
             if (this.tuningKnob) {
                 this.tuningKnob.style.transform = `rotate(${this.knobAngle}deg)`;
+            }
+
+            if (this.soundManager) {
+                this.soundManager.playRadioClickSound();
             }
 
             this.updateDisplay();
