@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Water } from 'three/addons/objects/Water.js';
+import { createOcean } from './ocean.js';
 
 export function setupScene() {
     const scene = new THREE.Scene();
@@ -18,24 +18,8 @@ export function setupScene() {
     dirLight.position.set(30, 50, 30);
     scene.add(dirLight);
 
-    // Water Setup
-    const waterGeometry = new THREE.PlaneGeometry(2000, 2000);
-    const water = new Water(waterGeometry, {
-        textureWidth: 512,
-        textureHeight: 512,
-        waterNormals: new THREE.TextureLoader().load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/waternormals.jpg', (texture) => {
-            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(20, 20);
-        }),
-        sunDirection: dirLight.position.clone().normalize(),
-        sunColor: 0xffffff,
-        waterColor: 0x00416a,
-        distortionScale: 3.7,
-        fog: scene.fog !== undefined
-    });
-    water.rotation.x = -Math.PI / 2;
-    water.position.y = -2.0;
-    scene.add(water);
+    // Initialize Ocean via dedicated module
+    const water = createOcean(scene, dirLight);
 
     // Handle window resizing
     window.addEventListener('resize', () => {
