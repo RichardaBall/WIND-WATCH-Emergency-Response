@@ -52,6 +52,62 @@ export class HelicopterPlayer {
         
         if (animations && Array.isArray(animations)) {
             animations.forEach((clip) => {
+                // Fix non-seamless looping and frame-1 start offset for rotor/armature animations
+                if (clip.name.toLowerCase().includes('rotor') || clip.name.toLowerCase().includes('armature') || clip.name.includes('Арматура')) {
+                    // 1. Shift all track times so animation starts strictly at t = 0.0 (fixing frame 1 offset)
+                    let minTime = Infinity;
+                    clip.tracks.forEach((track) => {
+                        if (track.times.length > 0) {
+                            minTime = Math.min(minTime, track.times[0]);
+                        }
+                    });
+                    if (minTime < Infinity && minTime > 0) {
+                        clip.tracks.forEach((track) => {
+                            for (let i = 0; i < track.times.length; i++) {
+                                track.times[i] -= minTime;
+                            }
+                        });
+                    }
+
+                    // 2. Align last keyframe with first keyframe for seamless looping
+                    clip.tracks.forEach((track) => {
+                        if (track.times.length > 1) {
+                            const times = track.times;
+                            const values = track.values;
+                            const itemSize = track.getValueSize();
+                            
+                            if (itemSize === 4) {
+                                // Quaternion rotation track: align last keyframe with first keyframe with sign continuity
+                                const x0 = values[0], y0 = values[1], z0 = values[2], w0 = values[3];
+                                const lastIdx = (times.length - 1) * 4;
+                                const dot = x0 * values[lastIdx] + y0 * values[lastIdx+1] + z0 * values[lastIdx+2] + w0 * values[lastIdx+3];
+                                const sign = dot < 0 ? -1 : 1;
+                                
+                                values[lastIdx]     = x0 * sign;
+                                values[lastIdx + 1] = y0 * sign;
+                                values[lastIdx + 2] = z0 * sign;
+                                values[lastIdx + 3] = w0 * sign;
+                            } else if (itemSize === 3) {
+                                // Vector or Euler rotation track
+                                for (let i = 0; i < 3; i++) {
+                                    values[(times.length - 1) * 3 + i] = values[i];
+                                }
+                            }
+                        }
+                    });
+
+                    // 3. Trim clip duration strictly to the final keyframe timestamp
+                    let maxTime = 0;
+                    clip.tracks.forEach((track) => {
+                        if (track.times.length > 0) {
+                            maxTime = Math.max(maxTime, track.times[track.times.length - 1]);
+                        }
+                    });
+                    if (maxTime > 0) {
+                        clip.duration = maxTime;
+                    }
+                }
+
                 const action = this.mixer.clipAction(clip);
                 this.actions[clip.name] = action;
             });
