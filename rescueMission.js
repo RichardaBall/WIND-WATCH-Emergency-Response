@@ -74,7 +74,7 @@ export class RescueMission {
         this._initFallbackMesh();
         this._preloadLiferaft();
         
-        const initialDelay = 10000 + Math.random() * 10000;
+        const initialDelay = 120000 + Math.random() * 180000;
         setTimeout(() => {
             this.startMission();
         }, initialDelay);
@@ -406,7 +406,7 @@ export class RescueMission {
                 this.flashingLight.intensity = 0;
             }
 
-            const randomDelay = 10000 + Math.random() * 10000;
+            const randomDelay = 120000 + Math.random() * 180000;
             setTimeout(() => {
                 this.state = 'IDLE';
                 this.startMission();
