@@ -105,9 +105,19 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Loading Manager to track asset loading progress across all models
+let loadedGltfHeli = null;
+let loadedSpawnPosition = null;
+
+// Initialize Loading Manager to track asset loading progress across all models globally
 const loadingManager = new THREE.LoadingManager(
     () => {
+        console.log("LoadingManager: All assets loaded successfully.");
+        if (loadedGltfHeli && loadedSpawnPosition) {
+            initGameAfterLoad(loadedGltfHeli, loadedSpawnPosition);
+        } else {
+            console.warn("Loading complete, but helicopter or spawn position missing.");
+        }
+
         const loadingScreen = document.getElementById('loading-screen');
         if (loadingScreen) {
             loadingScreen.style.opacity = '0';
@@ -128,161 +138,172 @@ const loadingManager = new THREE.LoadingManager(
     }
 );
 
-// Initialize LiferaftManager, RescueMission, WindFarm and MainBase
+const loader = new GLTFLoader(loadingManager);
+
+// Preload helicopter model via loadingManager
+loader.load('helicopter.glb', (gltfHeli) => {
+    loadedGltfHeli = gltfHeli;
+}, undefined, (error) => {
+    console.error("Helicopter model failed to load:", error);
+});
+
+// Initialize LiferaftManager, RescueMission, WindFarm and MainBase with loadingManager
 liferaftManager = new LiferaftManager(scene, loadingManager);
 rescueMission = new RescueMission(scene, loadingManager);
 windFarm = new WindFarm(scene, loadingManager);
 
 mainBase = new MainBase(scene, loadingManager, (spawnPosition) => {
-    loader.load('helicopter.glb', (gltfHeli) => {
-        const model = gltfHeli.scene;
-        model.position.copy(spawnPosition);
-        scene.add(model);
-
-        try {
-            const shadowGeo = new THREE.PlaneGeometry(4.0, 4.0);
-            shadowGeo.rotateX(-Math.PI / 2);
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = 128;
-            canvas.height = 128;
-            const ctx = canvas.getContext('2d');
-            const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-            gradient.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
-            gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 128, 128);
-
-            const shadowTexture = new THREE.CanvasTexture(canvas);
-            const shadowMat = new THREE.MeshBasicMaterial({
-                map: shadowTexture,
-                transparent: true,
-                depthWrite: false,
-            });
-
-            heliShadow = new THREE.Mesh(shadowGeo, shadowMat);
-            heliShadow.position.set(model.position.x, 0.05, model.position.z);
-            scene.add(heliShadow);
-        } catch (e) {
-            console.warn("Shadow mesh creation failed:", e);
-        }
-
-        heliLightsGroup = new THREE.Group();
-
-        redLight = new THREE.PointLight(0xff0000, 2.5, 8);
-        redLight.position.set(4.55, 1.50, 2.92);
-        heliLightsGroup.add(redLight);
-        redBulb = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-        redBulb.position.copy(redLight.position);
-        heliLightsGroup.add(redBulb);
-
-        greenLight = new THREE.PointLight(0x00ff00, 2.5, 8);
-        greenLight.position.set(5.09, 1.44, -1.00);
-        heliLightsGroup.add(greenLight);
-        greenBulb = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
-        greenBulb.position.copy(greenLight.position);
-        heliLightsGroup.add(greenBulb);
-
-        strobeLight = new THREE.PointLight(0xffffff, 8.0, 15);
-        strobeLight.position.set(7.24, 4.39, 1.30);
-        heliLightsGroup.add(strobeLight);
-        strobeBulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-        strobeBulb.position.copy(strobeLight.position);
-        heliLightsGroup.add(strobeBulb);
-
-        landingLight = new THREE.SpotLight(0xffffee, 18.0, 60, Math.PI / 6, 0.4, 1);
-        landingLight.position.set(-4.66, -0.04, -0.35);
-        const landingTarget = new THREE.Object3D();
-        landingTarget.position.set(-25, -6, 0);
-        model.add(landingTarget);
-        landingLight.target = landingTarget;
-        heliLightsGroup.add(landingLight);
-
-        cockpitLight = new THREE.PointLight(0xffd27d, 3.5, 6);
-        cockpitLight.position.set(-3.60, 1.90, -0.18);
-        heliLightsGroup.add(cockpitLight);
-
-        model.add(heliLightsGroup);
-
-        const mixer = new THREE.AnimationMixer(model);
-        helicopterPlayer = new HelicopterPlayer(model, gltfHeli.animations, mixer, soundManager);
-
-        navRadio = new NavRadio(helicopterPlayer, spawnPosition);
-        navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
-
-        developerTool = new DeveloperTool(weatherSystem, windFarm, mainBase, helicopterPlayer, camera, renderer, rescueMission ? rescueMission.winchSystem : null);
-
-        if (camera && inputManager) {
-            const elevationAngle = 45 * (Math.PI / 180); 
-            const cosAlpha = Math.cos(elevationAngle);
-            const sinAlpha = Math.sin(elevationAngle);
-            const diagFactor = 0.7071;
-            const dist = inputManager.cameraDistance || 30;
-            const offsetX = dist * cosAlpha * diagFactor;
-            const offsetY = dist * sinAlpha;
-            const offsetZ = dist * cosAlpha * diagFactor;
-
-            const initialCamPos = model.position.clone().add(new THREE.Vector3(offsetX, offsetY, offsetZ));
-            camera.position.copy(initialCamPos);
-            camera.lookAt(model.position);
-        }
-
-        const handleCrash = (crashPos, isSea = false) => {
-            if (helicopterPlayer && helicopterPlayer.model) {
-                helicopterPlayer.model.visible = false;
-            }
-            if (heliShadow) {
-                heliShadow.visible = false;
-            }
-            if (soundManager) {
-                soundManager.stopHelicopterEngine();
-                if (isSea) {
-                    soundManager.playSplashSound();
-                }
-            }
-            if (isSea && liferaftManager) {
-                liferaftManager.deploy(crashPos);
-            } else if (liferaftManager) {
-                liferaftManager.showRestart();
-            }
-
-            if (kneeboard && kneeboard.domElement) {
-                const kbDisplay = window.getComputedStyle(kneeboard.domElement).display;
-                if (kbDisplay !== 'none') {
-                    kneeboard.domElement.style.display = 'none';
-                }
-            }
-
-            if (navRadio && navRadio.container) {
-                const navDisplay = window.getComputedStyle(navRadio.container).display;
-                if (navDisplay !== 'none') {
-                    navRadio.container.style.display = 'none';
-                }
-            }
-        };
-
-        helicopterPlayer.onSeaCrash = (crashPos) => {
-            console.log("AW189: Sea crash event triggered at position:", crashPos);
-            handleCrash(crashPos, true);
-        };
-
-        helicopterPlayer.onHelipadCrash = (crashPos) => {
-            console.log("AW189: Gear-up landing damage sustained at position:", crashPos);
-            handleCrash(crashPos, false);
-        };
-
-        helicopterPlayer.onStructureCrash = (crashPos) => {
-            console.log("AW189: Structural collision crash sustained at position:", crashPos);
-            handleCrash(crashPos, false);
-        };
-
-    }, undefined, (error) => {
-        console.error("Helicopter model failed to load:", error);
-    });
+    loadedSpawnPosition = spawnPosition;
 });
 
-const loader = new GLTFLoader(loadingManager);
+function initGameAfterLoad(gltfHeli, spawnPosition) {
+    const model = gltfHeli.scene;
+    model.position.copy(spawnPosition);
+    scene.add(model);
+
+    try {
+        const shadowGeo = new THREE.PlaneGeometry(4.0, 4.0);
+        shadowGeo.rotateX(-Math.PI / 2);
+        
+        const canvas = document.createElement('canvas');
+        canvas.width = 128;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+        gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 128, 128);
+
+        const shadowTexture = new THREE.CanvasTexture(canvas);
+        const shadowMat = new THREE.MeshBasicMaterial({
+            map: shadowTexture,
+            transparent: true,
+            depthWrite: false,
+        });
+
+        heliShadow = new THREE.Mesh(shadowGeo, shadowMat);
+        heliShadow.position.set(model.position.x, 0.05, model.position.z);
+        scene.add(heliShadow);
+    } catch (e) {
+        console.warn("Shadow mesh creation failed:", e);
+    }
+
+    heliLightsGroup = new THREE.Group();
+
+    redLight = new THREE.PointLight(0xff0000, 2.5, 8);
+    redLight.position.set(4.55, 1.50, 2.92);
+    heliLightsGroup.add(redLight);
+    redBulb = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+    redBulb.position.copy(redLight.position);
+    heliLightsGroup.add(redBulb);
+
+    greenLight = new THREE.PointLight(0x00ff00, 2.5, 8);
+    greenLight.position.set(5.09, 1.44, -1.00);
+    heliLightsGroup.add(greenLight);
+    greenBulb = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
+    greenBulb.position.copy(greenLight.position);
+    heliLightsGroup.add(greenBulb);
+
+    strobeLight = new THREE.PointLight(0xffffff, 8.0, 15);
+    strobeLight.position.set(7.24, 4.39, 1.30);
+    heliLightsGroup.add(strobeLight);
+    strobeBulb = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    strobeBulb.position.copy(strobeLight.position);
+    heliLightsGroup.add(strobeBulb);
+
+    landingLight = new THREE.SpotLight(0xffffee, 18.0, 60, Math.PI / 6, 0.4, 1);
+    landingLight.position.set(-4.66, -0.04, -0.35);
+    const landingTarget = new THREE.Object3D();
+    landingTarget.position.set(-25, -6, 0);
+    model.add(landingTarget);
+    landingLight.target = landingTarget;
+    heliLightsGroup.add(landingLight);
+
+    cockpitLight = new THREE.PointLight(0xffd27d, 3.5, 6);
+    cockpitLight.position.set(-3.60, 1.90, -0.18);
+    heliLightsGroup.add(cockpitLight);
+
+    model.add(heliLightsGroup);
+
+    const mixer = new THREE.AnimationMixer(model);
+    helicopterPlayer = new HelicopterPlayer(model, gltfHeli.animations, mixer, soundManager);
+
+    navRadio = new NavRadio(helicopterPlayer, spawnPosition);
+    navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
+
+    developerTool = new DeveloperTool(weatherSystem, windFarm, mainBase, helicopterPlayer, camera, renderer, rescueMission ? rescueMission.winchSystem : null);
+
+    if (camera && inputManager) {
+        const elevationAngle = 45 * (Math.PI / 180); 
+        const cosAlpha = Math.cos(elevationAngle);
+        const sinAlpha = Math.sin(elevationAngle);
+        const diagFactor = 0.7071;
+        const dist = inputManager.cameraDistance || 30;
+        const offsetX = dist * cosAlpha * diagFactor;
+        const offsetY = dist * sinAlpha;
+        const offsetZ = dist * cosAlpha * diagFactor;
+
+        const initialCamPos = model.position.clone().add(new THREE.Vector3(offsetX, offsetY, offsetZ));
+        camera.position.copy(initialCamPos);
+        camera.lookAt(model.position);
+    }
+
+    const handleCrash = (crashPos, isSea = false) => {
+        if (helicopterPlayer && helicopterPlayer.model) {
+            helicopterPlayer.model.visible = false;
+        }
+        if (heliShadow) {
+            heliShadow.visible = false;
+        }
+        if (soundManager) {
+            soundManager.stopHelicopterEngine();
+            if (isSea) {
+                soundManager.playSplashSound();
+            }
+        }
+        if (isSea && liferaftManager) {
+            liferaftManager.deploy(crashPos);
+        } else if (liferaftManager) {
+            liferaftManager.showRestart();
+        }
+
+        if (kneeboard && kneeboard.domElement) {
+            const kbDisplay = window.getComputedStyle(kneeboard.domElement).display;
+            if (kbDisplay !== 'none') {
+                kneeboard.domElement.style.display = 'none';
+            }
+        }
+
+        if (navRadio && navRadio.container) {
+            const navDisplay = window.getComputedStyle(navRadio.container).display;
+            if (navDisplay !== 'none') {
+                navRadio.container.style.display = 'none';
+            }
+        }
+    };
+
+    helicopterPlayer.onSeaCrash = (crashPos) => {
+        console.log("AW189: Sea crash event triggered at position:", crashPos);
+        handleCrash(crashPos, true);
+    };
+
+    helicopterPlayer.onHelipadCrash = (crashPos) => {
+        console.log("AW189: Gear-up landing damage sustained at position:", crashPos);
+        handleCrash(crashPos, false);
+    };
+
+    helicopterPlayer.onStructureCrash = (crashPos) => {
+        console.log("AW189: Structural collision crash sustained at position:", crashPos);
+        handleCrash(crashPos, false);
+    };
+
+    // Immediate shader compilation to prevent stuttering on first frame / camera frustum entry
+    if (renderer && scene && camera) {
+        renderer.compile(scene, camera);
+    }
+}
 
 function animate() {
     requestAnimationFrame(animate);
