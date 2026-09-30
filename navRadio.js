@@ -58,11 +58,55 @@ export class NavRadio {
         const existingPanel = document.getElementById('nav-radio-panel');
         if (existingPanel) existingPanel.remove();
 
+        const existingToggle = document.getElementById('nav-radio-toggle-btn');
+        if (existingToggle) existingToggle.remove();
+
+        // Bottom-Right Nav Radio Toggle Icon Button (Transparent / No Background)
+        this.toggleBtn = document.createElement('button');
+        this.toggleBtn.id = 'nav-radio-toggle-btn';
+        this.toggleBtn.title = 'Toggle NDB Navigation Radio [N]';
+        this.toggleBtn.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            z-index: 1000;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, opacity 0.2s, color 0.2s;
+            opacity: 0.8;
+            color: #ffffff;
+        `;
+        this.toggleBtn.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 8.5a14.5 14.5 0 0 1 20 0"></path>
+                <path d="M5 12.5a10 10 0 0 1 14 0"></path>
+                <path d="M8.5 16.5a5.5 5.5 0 0 1 7 0"></path>
+                <circle cx="12" cy="20" r="1" fill="currentColor"></circle>
+            </svg>
+        `;
+        this.toggleBtn.addEventListener('click', () => {
+            const panel = document.getElementById('nav-radio-panel');
+            if (panel) {
+                const isVisible = panel.style.display === 'block';
+                panel.style.display = isVisible ? 'none' : 'block';
+                this.toggleBtn.style.color = isVisible ? '#ffffff' : '#00ff00';
+            }
+        });
+        this.toggleBtn.addEventListener('mouseenter', () => this.toggleBtn.style.opacity = '1.0');
+        this.toggleBtn.addEventListener('mouseleave', () => this.toggleBtn.style.opacity = '0.8');
+        document.body.appendChild(this.toggleBtn);
+
         this.container = document.createElement('div');
         this.container.id = 'nav-radio-panel';
         this.container.style.cssText = `
             position: fixed;
-            bottom: 20px;
+            bottom: 65px;
             right: 20px;
             width: 170px;
             background: linear-gradient(135deg, #282a2d, #191a1c);
@@ -130,7 +174,11 @@ export class NavRadio {
                     e.preventDefault();
                     const panel = document.getElementById('nav-radio-panel');
                     if (panel) {
-                        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+                        const isVisible = panel.style.display === 'block';
+                        panel.style.display = isVisible ? 'none' : 'block';
+                        if (this.toggleBtn) {
+                            this.toggleBtn.style.color = isVisible ? '#ffffff' : '#00ff00';
+                        }
                     }
                 }
             });
@@ -191,10 +239,12 @@ export class NavRadio {
 
     hide() {
         if (this.container) this.container.style.display = 'none';
+        if (this.toggleBtn) this.toggleBtn.style.color = '#ffffff';
     }
 
     show() {
         if (this.container) this.container.style.display = 'block';
+        if (this.toggleBtn) this.toggleBtn.style.color = '#00ff00';
     }
 
     update() {

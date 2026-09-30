@@ -19,8 +19,8 @@ export class Kneeboard {
         this.container.id = 'pilot-kneeboard';
         this.container.style.cssText = `
             position: absolute;
-            bottom: 30px;
-            left: 30px;
+            bottom: 70px;
+            left: 20px;
             width: 350px;
             background: #d8d0b0;
             border: 4px solid #4a4532;
@@ -34,6 +34,40 @@ export class Kneeboard {
             user-select: none;
             pointer-events: auto;
         `;
+
+        // Bottom-Left Kneeboard Toggle Icon Button (Transparent / No Background)
+        this.toggleBtn = document.createElement('button');
+        this.toggleBtn.id = 'kneeboard-toggle-btn';
+        this.toggleBtn.title = 'Toggle Pilot Kneeboard [K]';
+        this.toggleBtn.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            z-index: 1000;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, opacity 0.2s, color 0.2s;
+            opacity: 0.8;
+            color: #00ff00;
+        `;
+        this.toggleBtn.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <line x1="9" y1="12" x2="15" y2="12"></line>
+                <line x1="9" y1="16" x2="13" y2="16"></line>
+            </svg>
+        `;
+        this.toggleBtn.addEventListener('click', () => this.toggle());
+        this.toggleBtn.addEventListener('mouseenter', () => this.toggleBtn.style.opacity = '1.0');
+        this.toggleBtn.addEventListener('mouseleave', () => this.toggleBtn.style.opacity = '0.8');
+        document.body.appendChild(this.toggleBtn);
 
         // Metallic binder clip at the top
         const clip = document.createElement('div');
@@ -424,6 +458,9 @@ export class Kneeboard {
     toggle() {
         this.visible = !this.visible;
         this.container.style.display = this.visible ? 'block' : 'none';
+        if (this.toggleBtn) {
+            this.toggleBtn.style.color = this.visible ? '#00ff00' : '#ffffff';
+        }
     }
 
     isConfigAllowed(player) {
