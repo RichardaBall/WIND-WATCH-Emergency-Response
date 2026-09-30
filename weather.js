@@ -254,11 +254,11 @@ export class WeatherSystem {
         scene.traverse((child) => {
             // 1. Sea Water Night Darkening & Reflection Adjustment
             if (child.material && child.material.uniforms && child.material.uniforms.waterColor) {
-                const dayWaterColor = new THREE.Color(0x00416a);
+                const dayWaterColor = new THREE.Color(0x0044bb);
                 const nightWaterColor = new THREE.Color(0x000103);
                 child.material.uniforms.waterColor.value.copy(dayWaterColor.clone().lerp(nightWaterColor, nightFactor));
                 if (child.material.uniforms.sunColor) {
-                    const daySunColor = new THREE.Color(0xffffff);
+                    const daySunColor = new THREE.Color(0x88ccff);
                     const nightSunColor = new THREE.Color(0x112233);
                     child.material.uniforms.sunColor.value.copy(daySunColor.clone().lerp(nightSunColor, nightFactor));
                 }

@@ -1,5 +1,4 @@
-- Heli Rotor sync stutter
-- Search light automation, comes on at night when near the helipad and locks onto centre of helipad. Also comes on when rescue mission at night and locks onto liferaft. 
+- Search light automation
 - Sounds
 - Lights
 - Incentive/gameplay, money system, needed to refuel, re-water. Money loss when WTG burning, incentive to put out fire. Also extra income for survivor rescues.
