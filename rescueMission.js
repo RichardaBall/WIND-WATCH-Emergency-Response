@@ -50,10 +50,13 @@ export class RescueMission {
         this.raftPosition = new THREE.Vector3();
         this.flashTimer = 0;
         this.rescueFreq = 270.0;
-        this.raftTemplate = null;
+        this.raftTemplates = [];
+        this.raftMixers = [];
+        this.raftAnimationsList = [];
         this.raftMixer = null;
         this.isRaftLoading = false;
         this.usingFallback = false;
+        this.currentRaftIndex = null; // Tracks the alternation sequence
         
         this.winchSystem = new WinchSystem(scene, loadingManager);
         this.survivor = new Survivor(scene, loadingManager);
@@ -97,6 +100,10 @@ export class RescueMission {
 
     _preloadLiferaft() {
         this.isRaftLoading = true;
+        this.raftTemplates = [];
+        this.raftMixers = [];
+        this.raftAnimationsList = [];
+
         const manager = (this.loadingManager && typeof this.loadingManager.itemStart === 'function') 
             ? this.loadingManager 
             : THREE.DefaultLoadingManager;
@@ -106,34 +113,53 @@ export class RescueMission {
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
 
-        loader.load('liferaft.glb', (gltf) => {
-            optimizeAndWarmUpGltf(gltf.scene);
-            this.raftTemplate = gltf.scene;
-            this.raftTemplate.scale.set(2.0, 2.0, 2.0);
-            this.raftTemplate.position.set(0, -9999, 0);
-            this.raftTemplate.visible = false;
-            
-            this.raftAnimations = gltf.animations;
-            if (gltf.animations && gltf.animations.length > 0) {
-                this.raftMixer = new THREE.AnimationMixer(this.raftTemplate);
-                const action = this.raftMixer.clipAction(gltf.animations[0]);
-                action.play();
-            }
+        const files = ['liferaft.glb', 'liferaft2.glb'];
+        let loadedCount = 0;
 
-            this.scene.add(this.raftTemplate);
-            this.isRaftLoading = false;
+        files.forEach((file, index) => {
+            loader.load(file, (gltf) => {
+                optimizeAndWarmUpGltf(gltf.scene);
+                const template = gltf.scene;
+                template.scale.set(2.0, 2.0, 2.0);
+                template.position.set(0, -9999, 0);
+                template.visible = false;
+                
+                let mixer = null;
+                if (gltf.animations && gltf.animations.length > 0) {
+                    mixer = new THREE.AnimationMixer(template);
+                    const action = mixer.clipAction(gltf.animations[0]);
+                    action.play();
+                }
 
-            if (this.state === 'ACTIVE' && this.usingFallback) {
-                this._upgradeToGltfRaft();
-            } else if (this.state === 'IDLE') {
-                this._scheduleInitialMission();
-            }
-        }, undefined, (err) => {
-            this.isRaftLoading = false;
-            console.warn("Failed to preload liferaft.glb, will use fallback mesh:", err);
-            if (this.state === 'IDLE') {
-                this._scheduleInitialMission();
-            }
+                this.scene.add(template);
+                this.raftTemplates[index] = template;
+                this.raftMixers[index] = mixer;
+                this.raftAnimationsList[index] = gltf.animations;
+
+                loadedCount++;
+                if (loadedCount === files.length) {
+                    this.isRaftLoading = false;
+                    if (this.state === 'ACTIVE' && this.usingFallback) {
+                        this._upgradeToGltfRaft();
+                    } else if (this.state === 'IDLE') {
+                        this._scheduleInitialMission();
+                    }
+                }
+            }, undefined, (err) => {
+                console.warn(`Failed to preload ${file}:`, err);
+                loadedCount++;
+                if (loadedCount === files.length) {
+                    this.isRaftLoading = false;
+                    if (this.raftTemplates.filter(Boolean).length === 0) {
+                        console.warn("All liferaft models failed to load, will use fallback mesh.");
+                    }
+                    if (this.state === 'ACTIVE' && this.usingFallback) {
+                        this._upgradeToGltfRaft();
+                    } else if (this.state === 'IDLE') {
+                        this._scheduleInitialMission();
+                    }
+                }
+            });
         });
     }
 
@@ -249,30 +275,7 @@ export class RescueMission {
             this.pagerElement.style.display = 'block';
         }
 
-        // Position light and visible mesh dropped down by 100mm to y = 3.9
-        if (this.flashingLight) {
-            this.flashingLight.position.set(this.raftPosition.x, this.raftPosition.y + 3.9, this.raftPosition.z);
-        }
-        if (this.flashingMesh) {
-            this.flashingMesh.position.set(this.raftPosition.x, this.raftPosition.y + 3.9, this.raftPosition.z);
-            this.flashingMesh.visible = true;
-        }
-
-        if (this.raftTemplate) {
-            this.raftMesh = this.raftTemplate;
-            this.raftMesh.position.copy(this.raftPosition);
-            this.raftMesh.visible = true;
-            if (this.raftMixer && this.raftAnimations.length > 0) {
-                this.raftMixer.stopAllAction();
-                const action = this.raftMixer.clipAction(this.raftAnimations[0], this.raftMesh);
-                action.reset().play();
-            }
-        } else {
-            this.usingFallback = true;
-            this.raftMesh = this.fallbackMesh;
-            this.raftMesh.position.copy(this.raftPosition);
-            this.raftMesh.visible = true;
-        }
+        this._selectRaft(false);
 
         if (this.survivor) {
             this.survivor.spawnOnRaft(
@@ -282,20 +285,68 @@ export class RescueMission {
         }
     }
 
-    _upgradeToGltfRaft() {
-        if (!this.raftTemplate || !this.usingFallback) return;
+    _selectRaft(isUpgrade = false) {
+        const validIndices = [];
+        this.raftTemplates.forEach((template, idx) => {
+            if (template) validIndices.push(idx);
+        });
+
+        if (validIndices.length === 0) {
+            this.usingFallback = true;
+            this.raftMesh = this.fallbackMesh;
+            this.raftMesh.position.copy(this.raftPosition);
+            this.raftMesh.visible = true;
+
+            const lightY = this.raftPosition.y + 3.9;
+            if (this.flashingLight) this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
+            if (this.flashingMesh) this.flashingMesh.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
+            return;
+        }
+
+        let chosenOriginalIndex;
+        if (this.currentRaftIndex === null) {
+            const randomPos = Math.floor(Math.random() * validIndices.length);
+            chosenOriginalIndex = validIndices[randomPos];
+            this.currentRaftIndex = validIndices.indexOf(chosenOriginalIndex);
+        } else if (!isUpgrade) {
+            this.currentRaftIndex = (this.currentRaftIndex + 1) % validIndices.length;
+            chosenOriginalIndex = validIndices[this.currentRaftIndex];
+        } else {
+            chosenOriginalIndex = validIndices[this.currentRaftIndex];
+        }
+
         if (this.fallbackMesh) {
             this.fallbackMesh.visible = false;
         }
         this.usingFallback = false;
-        this.raftMesh = this.raftTemplate;
+        this.raftMesh = this.raftTemplates[chosenOriginalIndex];
         this.raftMesh.position.copy(this.raftPosition);
         this.raftMesh.visible = true;
-        if (this.raftMixer && this.raftAnimations.length > 0) {
+
+        this.raftMixer = this.raftMixers[chosenOriginalIndex];
+        if (this.raftMixer && this.raftAnimationsList[chosenOriginalIndex] && this.raftAnimationsList[chosenOriginalIndex].length > 0) {
             this.raftMixer.stopAllAction();
-            const action = this.raftMixer.clipAction(this.raftAnimations[0], this.raftMesh);
+            const action = this.raftMixer.clipAction(this.raftAnimationsList[chosenOriginalIndex][0], this.raftMesh);
             action.reset().play();
         }
+
+        // Model-specific light height offsets:
+        // Index 0 = liferaft.glb (3.9)
+        // Index 1 = liferaft2.glb (adjust 2.5 as needed)
+        const lightHeights = [3.9, 2.1];
+        const heightOffset = lightHeights[chosenOriginalIndex] !== undefined ? lightHeights[chosenOriginalIndex] : 3.9;
+
+        const lightY = this.raftPosition.y + heightOffset;
+        if (this.flashingLight) {
+            this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
+        }
+        if (this.flashingMesh) {
+            this.flashingMesh.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
+        }
+    }
+
+    _upgradeToGltfRaft() {
+        this._selectRaft(true);
     }
 
     toggleWinch(helicopterPlayer) {
