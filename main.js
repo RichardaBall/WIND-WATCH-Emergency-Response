@@ -10,6 +10,7 @@ import { NavIndicator } from './navIndicator.js';
 import { Kneeboard } from './kneeboard.js';
 import { WindFarm } from './windFarm.js';
 import { MainBase } from './mainbase.js';
+import { LightingSystem } from './lighting.js';
 import { LiferaftManager } from './liferaft.js';
 import { WaterSystem } from './waterSystem.js';
 import { SirenSystem } from './sirenSystem.js';
@@ -32,6 +33,7 @@ let helicopterPlayer = null;
 let navRadio = null;
 let navIndicator = null;
 let mainBase = null;
+let lightingSystem = null;
 let windFarm = null;
 let developerTool = null;
 let liferaftManager = null;
@@ -154,6 +156,8 @@ windFarm = new WindFarm(scene, loadingManager);
 
 mainBase = new MainBase(scene, loadingManager, (spawnPosition) => {
     loadedSpawnPosition = spawnPosition;
+    // Initialize standalone lighting system anchored to helipad center
+    lightingSystem = new LightingSystem(scene, mainBase.helipadCenter);
 });
 
 function initGameAfterLoad(gltfHeli, spawnPosition) {
@@ -259,7 +263,7 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
         }
         if (soundManager) {
             soundManager.stopHelicopterEngine();
-            soundManager.playSplashSound(); // Play impact/crash sound on all crash types
+            soundManager.playSplashSound();
         }
         if (liferaftManager) {
             liferaftManager.showRestart();

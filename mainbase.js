@@ -22,6 +22,30 @@ export class MainBase {
         loader.load('mainbase.glb', (gltf) => {
             this.model = gltf.scene;
             this.model.position.set(0, 0, 0);
+
+            // Traverse the loaded model to disable/hide any original Blender lights or old bulbs
+            this.model.traverse((child) => {
+                // Disable embedded Three.js light objects
+                if (child.isLight) {
+                    child.intensity = 0;
+                    child.visible = false;
+                }
+                // Hide old Blender light meshes / bulbs (matching typical naming conventions)
+                if (child.isMesh) {
+                    const nameLower = child.name.toLowerCase();
+                    if (
+                        nameLower.includes('light') || 
+                        nameLower.includes('lamp') || 
+                        nameLower.includes('bulb') || 
+                        nameLower.includes('beacon') ||
+                        nameLower.includes('green') ||
+                        nameLower.includes('red')
+                    ) {
+                        child.visible = false;
+                    }
+                }
+            });
+
             this.group.add(this.model);
 
             // Custom multi-box configuration for main base structure and platform deck
