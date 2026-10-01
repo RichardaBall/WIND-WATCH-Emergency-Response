@@ -126,76 +126,19 @@ export class RescueMission {
             if (this.state === 'ACTIVE' && this.usingFallback) {
                 this._upgradeToGltfRaft();
             } else if (this.state === 'IDLE') {
-                this.preWarm();
+                this._scheduleInitialMission();
             }
         }, undefined, (err) => {
             this.isRaftLoading = false;
             console.warn("Failed to preload liferaft.glb, will use fallback mesh:", err);
             if (this.state === 'IDLE') {
-                this.preWarm();
+                this._scheduleInitialMission();
             }
         });
     }
 
-    preWarm() {
+    _scheduleInitialMission() {
         if (this.state !== 'IDLE') return;
-        
-        this.startMission();
-        
-        this.survivorAttached = true;
-        this.state = 'WINCHING';
-        if (this.raftMesh) {
-            this.raftMesh.visible = false;
-        }
-        if (this.survivor) {
-            this.survivor.attachToWinch();
-        }
-        
-        this.state = 'RETURNING';
-        if (this.pagerElement) {
-            this.pagerElement.style.display = 'none';
-        }
-        if (this.survivor) {
-            this.survivor.enterCabin();
-        }
-        if (window.navRadio && window.navRadio.stations[this.rescueFreq]) {
-            delete window.navRadio.stations[this.rescueFreq];
-        }
-        
-        this.state = 'DISEMBARKING';
-        if (this.survivor) {
-            this.survivor.disembarkNextToHelicopter(
-                { x: -14.00, y: 4.80, z: 3.35, rotationY: 1.5533 },
-                1.5533,
-                4.80,
-                true
-            );
-        }
-        
-        const activeRenderer = window.renderer || null;
-        const activeCamera = window.camera || null;
-        if (activeRenderer && activeCamera) {
-            activeRenderer.compile(this.scene, activeCamera);
-        }
-
-        this.state = 'IDLE';
-        if (this.pagerElement) {
-            this.pagerElement.style.display = 'none';
-        }
-        if (this.raftMesh) {
-            this.raftMesh.visible = false;
-            this.raftMesh = null;
-        }
-        if (this.flashingLight) {
-            this.flashingLight.intensity = 0;
-        }
-        if (this.flashingMesh) {
-            this.flashingMesh.visible = false;
-        }
-        if (this.survivor && this.survivor.model) {
-            this.survivor.model.position.set(0, -9999, 0);
-            this.survivor.model.visible = false;
-        }
 
         const initialDelay = 1000 + Math.random() * 2000;
         setTimeout(() => {
