@@ -307,6 +307,17 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
 function animate() {
     requestAnimationFrame(animate);
 
+    if (developerTool && developerTool.isPaused) {
+        clock.getDelta(); // Clear elapsed time accumulator to prevent time jumps on unpause
+        if (developerTool.isFreeCamActive && developerTool.orbitControls) {
+            developerTool.orbitControls.update();
+        }
+        if (renderer && scene && camera) {
+            renderer.render(scene, camera);
+        }
+        return;
+    }
+
     const delta = clock.getDelta();
 
     if (water && water.material && water.material.uniforms && water.material.uniforms['time']) {

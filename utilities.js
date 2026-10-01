@@ -18,6 +18,7 @@ export class DeveloperTool {
         this.isFreeCamActive = false;
         this.orbitControls = null;
         this.isCollisionEnabled = true;
+        this.isPaused = false;
 
         if (this.camera && this.renderer) {
             this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -81,7 +82,7 @@ export class DeveloperTool {
             <div style="margin-bottom: 14px;">
                 <label style="display: block; color: #94a3b8; margin-bottom: 6px; font-size: 11px; text-transform: uppercase;">Weather Condition</label>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <button id="dev-btn-fine" style="background: #0ea5e9; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">☀️ Fine Weather</button>
+                    <button id="dev-btn-fine" style="background: #0ea5e9; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">☀️️ Fine Weather</button>
                     <button id="dev-btn-rain" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">🌧️ Rain</button>
                     <button id="dev-btn-storm" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">⚡ Storm</button>
                 </div>
@@ -92,8 +93,11 @@ export class DeveloperTool {
                 <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                     <button id="dev-collision" style="flex: 1; background: #10b981; border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">🛡️ Collision: ON</button>
                 </div>
-                <div style="display: flex; gap: 6px;">
+                <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                     <button id="dev-free-cam" style="flex: 1; background: #7c3aed; border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">📷 Free Camera: OFF</button>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button id="dev-pause" style="flex: 1; background: #eab308; border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">⏸️ Pause Game: OFF</button>
                 </div>
             </div>
 
@@ -148,6 +152,10 @@ export class DeveloperTool {
         document.getElementById('dev-free-cam').addEventListener('click', () => {
             this.toggleFreeCam();
         });
+
+        document.getElementById('dev-pause').addEventListener('click', () => {
+            this.togglePause();
+        });
     }
 
     toggleCollision() {
@@ -160,7 +168,7 @@ export class DeveloperTool {
         const btn = document.getElementById('dev-collision');
         if (btn) {
             btn.style.background = this.isCollisionEnabled ? '#10b981' : '#dc2626';
-            btn.textContent = `🛡️ Collision: ${this.isCollisionEnabled ? 'ON' : 'OFF'}`;
+            btn.textContent = `🛡️️ Collision: ${this.isCollisionEnabled ? 'ON' : 'OFF'}`;
         }
     }
 
@@ -183,6 +191,15 @@ export class DeveloperTool {
             const targetPos = this.getTargetPosition();
             const endCamPos = targetPos.clone().add(new THREE.Vector3(25, 20, 25));
             this.smoothTransitionTo(endCamPos, targetPos);
+        }
+    }
+
+    togglePause() {
+        this.isPaused = !this.isPaused;
+        const btn = document.getElementById('dev-pause');
+        if (btn) {
+            btn.style.background = this.isPaused ? '#dc2626' : '#eab308';
+            btn.textContent = `⏸️ Pause Game: ${this.isPaused ? 'ON' : 'OFF'}`;
         }
     }
 
