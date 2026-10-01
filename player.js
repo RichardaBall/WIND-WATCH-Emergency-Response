@@ -16,25 +16,89 @@ export class HelicopterPlayer {
         this.isPermanentlyDamaged = false; // Gear-up landing damage state
         this.collisionEnabled = true; // Collision detection toggle state
 
-        // Find and cache the top strobe light and its bulb mesh once
+        // --- Hardcoded Nav Lights (Red, Green) & White Strobe Positions ---
+        this.navRedLight = null;
+        this.navGreenLight = null;
         this.strobeLight = null;
-        this.strobeOriginalColor = new THREE.Color(0xffffff);
+        
+        this.navRedBulbMesh = null;
+        this.navGreenBulbMesh = null;
         this.strobeBulbMesh = null;
 
+        this.navRedOffset = new THREE.Vector3(4.57, 1.43, 2.89);
+        this.navGreenOffset = new THREE.Vector3(5.10, 1.43, -0.96);
+        this.strobeOffset = new THREE.Vector3(7.28, 4.32, 1.29);
+
+        this.strobeOriginalColor = new THREE.Color(0xffffff);
+
         this.model.traverse((child) => {
-            if (child.isPointLight && child.position.y > 3.0) {
-                this.strobeLight = child;
-                this.strobeOriginalColor = child.color.clone();
+            if (child.isPointLight) {
+                if (child.color.r > 0.5 && child.color.g < 0.2 && child.color.b < 0.2) {
+                    this.navRedLight = child;
+                } else if (child.color.g > 0.5 && child.color.r < 0.2 && child.color.b < 0.2) {
+                    this.navGreenLight = child;
+                } else if (child.color.r > 0.8 && child.color.g > 0.8 && child.color.b > 0.8 || child.position.y > 3.0) {
+                    this.strobeLight = child;
+                    this.strobeOriginalColor.copy(child.color);
+                }
             }
         });
 
-        if (this.strobeLight) {
-            this.model.traverse((child) => {
-                if (child.isMesh && child.position.distanceTo(this.strobeLight.position) < 0.1) {
+        // Create lights if missing in model and apply hardcoded positions
+        if (!this.navRedLight) {
+            this.navRedLight = new THREE.PointLight(0xff0000, 2.5, 10);
+            this.model.add(this.navRedLight);
+        }
+        this.navRedLight.position.copy(this.navRedOffset);
+
+        if (!this.navGreenLight) {
+            this.navGreenLight = new THREE.PointLight(0x00ff00, 2.5, 10);
+            this.model.add(this.navGreenLight);
+        }
+        this.navGreenLight.position.copy(this.navGreenOffset);
+
+        if (!this.strobeLight) {
+            this.strobeLight = new THREE.PointLight(0xffffff, 8.0, 15);
+            this.model.add(this.strobeLight);
+        }
+        this.strobeLight.position.copy(this.strobeOffset);
+
+        // Find or create bulb meshes for emissive glow
+        this.model.traverse((child) => {
+            if (child.isMesh) {
+                if (this.navRedLight && child.position.distanceTo(this.navRedOffset) < 0.5) {
+                    this.navRedBulbMesh = child;
+                } else if (this.navGreenLight && child.position.distanceTo(this.navGreenOffset) < 0.5) {
+                    this.navGreenBulbMesh = child;
+                } else if (this.strobeLight && child.position.distanceTo(this.strobeOffset) < 0.5) {
                     this.strobeBulbMesh = child;
                 }
-            });
+            }
+        });
+
+        if (!this.navRedBulbMesh) {
+            const bulbGeo = new THREE.SphereGeometry(0.08, 16, 16);
+            const bulbMat = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000, emissiveIntensity: 3.0 });
+            this.navRedBulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+            this.model.add(this.navRedBulbMesh);
         }
+        this.navRedBulbMesh.position.copy(this.navRedOffset);
+
+        if (!this.navGreenBulbMesh) {
+            const bulbGeo = new THREE.SphereGeometry(0.08, 16, 16);
+            const bulbMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 3.0 });
+            this.navGreenBulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+            this.model.add(this.navGreenBulbMesh);
+        }
+        this.navGreenBulbMesh.position.copy(this.navGreenOffset);
+
+        if (!this.strobeBulbMesh) {
+            const bulbGeo = new THREE.SphereGeometry(0.08, 16, 16);
+            const bulbMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 3.0 });
+            this.strobeBulbMesh = new THREE.Mesh(bulbGeo, bulbMat);
+            this.model.add(this.strobeBulbMesh);
+        }
+        this.strobeBulbMesh.position.copy(this.strobeOffset);
         
         window.addEventListener('keydown', (event) => {
             if (event.ctrlKey && event.code === 'KeyW') {
@@ -52,9 +116,7 @@ export class HelicopterPlayer {
         
         if (animations && Array.isArray(animations)) {
             animations.forEach((clip) => {
-                // Fix non-seamless looping and frame-1 start offset for rotor/armature animations
                 if (clip.name.toLowerCase().includes('rotor') || clip.name.toLowerCase().includes('armature') || clip.name.includes('Арматура')) {
-                    // 1. Shift all track times so animation starts strictly at t = 0.0 (fixing frame 1 offset)
                     let minTime = Infinity;
                     clip.tracks.forEach((track) => {
                         if (track.times.length > 0) {
@@ -69,7 +131,6 @@ export class HelicopterPlayer {
                         });
                     }
 
-                    // 2. Align last keyframe with first keyframe for seamless looping
                     clip.tracks.forEach((track) => {
                         if (track.times.length > 1) {
                             const times = track.times;
@@ -77,7 +138,6 @@ export class HelicopterPlayer {
                             const itemSize = track.getValueSize();
                             
                             if (itemSize === 4) {
-                                // Quaternion rotation track: align last keyframe with first keyframe with sign continuity
                                 const x0 = values[0], y0 = values[1], z0 = values[2], w0 = values[3];
                                 const lastIdx = (times.length - 1) * 4;
                                 const dot = x0 * values[lastIdx] + y0 * values[lastIdx+1] + z0 * values[lastIdx+2] + w0 * values[lastIdx+3];
@@ -88,7 +148,6 @@ export class HelicopterPlayer {
                                 values[lastIdx + 2] = z0 * sign;
                                 values[lastIdx + 3] = w0 * sign;
                             } else if (itemSize === 3) {
-                                // Vector or Euler rotation track
                                 for (let i = 0; i < 3; i++) {
                                     values[(times.length - 1) * 3 + i] = values[i];
                                 }
@@ -96,7 +155,6 @@ export class HelicopterPlayer {
                         }
                     });
 
-                    // 3. Trim clip duration strictly to the final keyframe timestamp
                     let maxTime = 0;
                     clip.tracks.forEach((track) => {
                         if (track.times.length > 0) {
@@ -126,16 +184,14 @@ export class HelicopterPlayer {
 
         this.isGearUp = false; 
 
-        // --- AW189 Specs & Limits ---
         this.dryWeightKg = 4600;       
         this.fuelKg = 1000;            
         this.maxFuelKg = 1000;
-        this.waterTankKg = 1000;      // Firefighting water tank load
-        this.maxWaterTankKg = 1500;   // Maximum water tank capacity
+        this.waterTankKg = 1000;      
+        this.maxWaterTankKg = 1500;   
         this.baselineMassKg = 6200; 
 
         this.maxFuelBurnRatePerSec = 1000.0 / 300.0; 
-
         this.maxMoveSpeed = 75.0;       
         this.maxTaxiSpeed = 3.0;        
         this.maxTurnSpeed = 1.5;        
@@ -143,7 +199,7 @@ export class HelicopterPlayer {
         this.maxAltitudeSpeed = 12.0;    
 
         this.currentMoveSpeed = 0.0;
-        this.currentStrafeSpeed = 0.0; // Lateral left/right drift speed
+        this.currentStrafeSpeed = 0.0; 
         this.currentTurnSpeed = 0.0;
         this.currentAltitudeSpeed = 0.0;
 
@@ -171,71 +227,41 @@ export class HelicopterPlayer {
     }
 
     toggleElectrical() {
-        if (this.isPermanentlyDamaged) {
-            console.warn("System unresponsive: Aircraft has sustained severe gear-up landing damage.");
-            return;
-        }
+        if (this.isPermanentlyDamaged) return;
         this.isElectricalOn = !this.isElectricalOn;
-        console.log("Electrical System: " + (this.isElectricalOn ? "ON" : "OFF"));
         if (this.soundManager) {
             if (typeof this.soundManager.playToggleSwitchSound === 'function') {
                 this.soundManager.playToggleSwitchSound(this.isElectricalOn);
-            } else if (typeof this.soundManager.playBatterySwitchSound === 'function') {
-                this.soundManager.playBatterySwitchSound(this.isElectricalOn);
             }
         }
     }
 
     toggleFuelPump() {
-        if (this.isPermanentlyDamaged) {
-            console.warn("System unresponsive: Aircraft has sustained severe gear-up landing damage.");
-            return;
-        }
+        if (this.isPermanentlyDamaged) return;
         this.isFuelPumpOn = !this.isFuelPumpOn;
-        console.log("Fuel Pump: " + (this.isFuelPumpOn ? "ON" : "OFF"));
         if (this.soundManager) {
             if (typeof this.soundManager.playToggleSwitchSound === 'function') {
                 this.soundManager.playToggleSwitchSound(this.isFuelPumpOn);
-            } else if (typeof this.soundManager.playBatterySwitchSound === 'function') {
-                this.soundManager.playBatterySwitchSound(this.isFuelPumpOn);
             }
+            if (this.isFuelPumpOn) this.soundManager.playFuelPumpPrimeSound();
         }
-        if (this.isFuelPumpOn && this.soundManager) {
-            this.soundManager.playFuelPumpPrimeSound();
-        }
-        if (this.isFuelPumpOn) {
-            this.fuelStarvationTimer = 0.0;
-        }
+        if (this.isFuelPumpOn) this.fuelStarvationTimer = 0.0;
     }
 
     toggleEngine() {
-        if (this.isPermanentlyDamaged) {
-            console.warn("System unresponsive: Aircraft has sustained severe gear-up landing damage.");
-            return;
-        }
-        if (!this.isElectricalOn && this.targetEnginePower === 0) {
-            console.warn("Cannot start engine: Electrical system (Q) is OFF.");
-            return;
-        }
-        if (this.fuelKg <= 0 && this.targetEnginePower === 0) {
-            console.warn("Cannot start engine: Out of fuel.");
-            return;
-        }
-        if (!this.isFuelPumpOn && this.targetEnginePower === 0) {
-            console.warn("Cannot start engine: Fuel pump (F) is OFF.");
-            return;
-        }
+        if (this.isPermanentlyDamaged) return;
+        if (!this.isElectricalOn && this.targetEnginePower === 0) return;
+        if (this.fuelKg <= 0 && this.targetEnginePower === 0) return;
+        if (!this.isFuelPumpOn && this.targetEnginePower === 0) return;
 
         if (this.targetEnginePower > 0) {
             this.targetEnginePower = 0.0;
             this.isEngineRunning = false;
-            console.log("Engine Ignition: OFF");
             if (this.soundManager) this.soundManager.stopHelicopterEngine();
         } else {
             this.targetEnginePower = 1.0;
             this.isEngineRunning = true;
             this.fuelStarvationTimer = 0.0;
-            console.log("Engine Ignition: ON");
             if (this.soundManager) this.soundManager.startHelicopterEngine();
             
             for (let name in this.actions) {
@@ -245,31 +271,14 @@ export class HelicopterPlayer {
                 }
             }
         }
-
-        const engineActive = this.targetEnginePower > 0;
-        if (this.soundManager) {
-            if (typeof this.soundManager.playToggleSwitchSound === 'function') {
-                this.soundManager.playToggleSwitchSound(engineActive);
-            } else if (typeof this.soundManager.playBatterySwitchSound === 'function') {
-                this.soundManager.playBatterySwitchSound(engineActive);
-            }
-        }
     }
 
     toggleLandingGear() {
-        if (this.isPermanentlyDamaged) {
-            console.warn("System unresponsive: Aircraft has sustained severe gear-up landing damage.");
-            return;
-        }
-        if (!this.isElectricalOn) return;
+        if (this.isPermanentlyDamaged || !this.isElectricalOn) return;
 
-        // Prevent retracting landing gear while on the ground
         const activeGroundLevel = this.getCurrentGroundLevel();
         const isOnGround = this.model.position.y <= activeGroundLevel + 0.05;
-        if (isOnGround && !this.isGearUp) {
-            console.warn("Cannot retract landing gear while landed on the ground.");
-            return;
-        }
+        if (isOnGround && !this.isGearUp) return;
 
         let gearAction = null;
         for (let name in this.actions) {
@@ -295,9 +304,7 @@ export class HelicopterPlayer {
         if (!this.collisionEnabled) return false;
         if (this.hasCrashedInSea || this.isPermanentlyDamaged || this.hasCrashedIntoStructure) return false;
 
-        // Construct helicopter bounding box
         const heliBox = new THREE.Box3().setFromObject(this.model);
-        // Slightly shrink bounding box for forgiving gameplay
         heliBox.expandByScalar(-0.5);
 
         const allBoxes = [];
@@ -310,11 +317,10 @@ export class HelicopterPlayer {
 
         for (let i = 0; i < allBoxes.length; i++) {
             if (heliBox.intersectsBox(allBoxes[i])) {
-                // Ensure helipad zone remains crash-free (check if collision point is within helipad landing zone radius 12m)
                 const helipadCenter2D = new THREE.Vector2(0.0, 0.0);
                 const heliPos2D = new THREE.Vector2(this.model.position.x, this.model.position.z);
                 if (heliPos2D.distanceTo(helipadCenter2D) < 12.0) {
-                    continue; // Skip collision in helipad zone to keep it crash-free
+                    continue; 
                 }
                 return true;
             }
@@ -325,7 +331,6 @@ export class HelicopterPlayer {
     update(delta, keys, weatherData, windFarm = null, mainBase = null) {
         if (this.hasCrashedInSea || this.isPermanentlyDamaged) {
             if (this.isPermanentlyDamaged) {
-                // Lock position to ground level and stop all rotor animations
                 const activeGroundLevel = this.getCurrentGroundLevel();
                 this.model.position.y = activeGroundLevel;
                 this.currentMoveSpeed = 0.0;
@@ -343,29 +348,23 @@ export class HelicopterPlayer {
             return;
         }
 
-        // --- Immediate Top-Level Sea Crash Check ---
         const helipadCenter2D = new THREE.Vector2(0.0, 0.0);
         const currentPos2D = new THREE.Vector2(this.model.position.x, this.model.position.z);
         const distanceFromHelipad = currentPos2D.distanceTo(helipadCenter2D);
 
         if (this.model.position.y <= this.landingHeightOffset && distanceFromHelipad >= 12.0) {
             this.hasCrashedInSea = true;
-
             if (this.soundManager) {
                 this.soundManager.stopHelicopterEngine();
                 this.soundManager.playSplashSound();
             }
-
-            if (this.onSeaCrash) {
-                this.onSeaCrash(this.model.position.clone());
-            }
+            if (this.onSeaCrash) this.onSeaCrash(this.model.position.clone());
             return;
         }
 
         const activeGroundLevel = this.getCurrentGroundLevel();
         const isOnGround = this.model.position.y <= activeGroundLevel + 0.05;
 
-        // --- Helipad Gear-Up Landing Damage Check ---
         if (!this.wasOnGround && isOnGround && distanceFromHelipad < 12.0 && this.isGearUp) {
             this.isPermanentlyDamaged = true;
             this.hasCrashedOnHelipad = true;
@@ -379,14 +378,8 @@ export class HelicopterPlayer {
             this.currentTurnSpeed = 0.0;
             this.currentAltitudeSpeed = 0.0;
             this.model.position.y = activeGroundLevel;
-
-            if (this.soundManager) {
-                this.soundManager.stopHelicopterEngine();
-            }
-
-            if (this.onHelipadCrash) {
-                this.onHelipadCrash(this.model.position.clone());
-            }
+            if (this.soundManager) this.soundManager.stopHelicopterEngine();
+            if (this.onHelipadCrash) this.onHelipadCrash(this.model.position.clone());
             return;
         }
 
@@ -425,6 +418,7 @@ export class HelicopterPlayer {
             }
         }
 
+        // Strobe / Fuel State Light Animation
         if (this.strobeLight && this.isElectricalOn) {
             const time = Date.now() * 0.001;
             let flashRate = this.fuelKg <= 100.0 ? 16.0 : (this.fuelKg <= 500.0 ? 8.0 : 4.0);
@@ -440,6 +434,33 @@ export class HelicopterPlayer {
         } else if (this.strobeLight) {
             this.strobeLight.intensity = 0;
             if (this.strobeBulbMesh) this.strobeBulbMesh.visible = false;
+        }
+
+        // Nav Lights State
+        if (this.isElectricalOn) {
+            if (this.navRedLight) {
+                this.navRedLight.intensity = 2.5;
+                if (this.navRedBulbMesh && this.navRedBulbMesh.material) {
+                    this.navRedBulbMesh.material.emissiveIntensity = 3.0;
+                    this.navRedBulbMesh.visible = true;
+                }
+            }
+            if (this.navGreenLight) {
+                this.navGreenLight.intensity = 2.5;
+                if (this.navGreenBulbMesh && this.navGreenBulbMesh.material) {
+                    this.navGreenBulbMesh.material.emissiveIntensity = 3.0;
+                    this.navGreenBulbMesh.visible = true;
+                }
+            }
+        } else {
+            if (this.navRedLight) {
+                this.navRedLight.intensity = 0;
+                if (this.navRedBulbMesh) this.navRedBulbMesh.visible = false;
+            }
+            if (this.navGreenLight) {
+                this.navGreenLight.intensity = 0;
+                if (this.navGreenBulbMesh) this.navGreenBulbMesh.visible = false;
+            }
         }
 
         if (this.enginePower !== this.targetEnginePower) {
@@ -488,7 +509,6 @@ export class HelicopterPlayer {
 
         let targetMove = 0, targetStrafe = 0, targetTurn = 0, targetAltitude = 0;
 
-        // Flight controls binding check (supporting both number row & numpad keys, with arrow key fallbacks)
         const key8 = keys['Digit8'] || keys['Numpad8'] || keys['ArrowUp'];
         const key5 = keys['Digit5'] || keys['Numpad5'] || keys['ArrowDown'];
         const key4 = keys['Digit4'] || keys['Numpad4'] || keys['ArrowLeft'];
@@ -499,12 +519,11 @@ export class HelicopterPlayer {
         if (key4) targetTurn += activeTurnSpeed;
         if (key6) targetTurn -= activeTurnSpeed;
 
-        // --- 100% RPM Takeoff & Flight Restriction ---
         if (this.enginePower >= 0.99) {
             if (key8) targetMove -= activeSpeedLimit;
             if (key5) targetMove += activeSpeedLimit;
-            if (key7) targetStrafe += activeSpeedLimit; // Drift Left
-            if (key9) targetStrafe -= activeSpeedLimit; // Drift Right
+            if (key7) targetStrafe += activeSpeedLimit; 
+            if (key9) targetStrafe -= activeSpeedLimit; 
             if (keys['ShiftLeft'] || keys['ShiftRight']) targetAltitude += (this.maxAltitudeSpeed * this.enginePower * activeLiftMultiplier) * massFactor;
             if (keys['ControlLeft'] || keys['ControlRight']) targetAltitude -= (this.maxAltitudeSpeed * this.enginePower * activeLiftMultiplier) * massFactor;
         } else if (!isOnGround) {
@@ -512,11 +531,10 @@ export class HelicopterPlayer {
             targetAltitude -= sinkRate;
             targetMove -= sinkRate * 4.0;
         } else {
-            // On ground and RPM < 100%: allow taxiing, but strictly prevent lift off / positive altitude changes
             if (key8) targetMove -= activeSpeedLimit;
             if (key5) targetMove += activeSpeedLimit;
-            if (key7) targetStrafe += activeSpeedLimit; // Drift Left
-            if (key9) targetStrafe -= activeSpeedLimit; // Drift Right
+            if (key7) targetStrafe += activeSpeedLimit; 
+            if (key9) targetStrafe -= activeSpeedLimit; 
             if (keys['ControlLeft'] || keys['ControlRight']) {
                 targetAltitude -= (this.maxAltitudeSpeed * this.enginePower * activeLiftMultiplier) * massFactor;
             }
@@ -527,7 +545,6 @@ export class HelicopterPlayer {
         this.currentTurnSpeed += (targetTurn - this.currentTurnSpeed) * Math.min(2.0 * delta, 1.0);
         this.currentAltitudeSpeed += (targetAltitude - this.currentAltitudeSpeed) * Math.min(3.5 * massFactor * delta, 1.0);
 
-        // --- Position & Collision Integration ---
         const prevPosition = this.model.position.clone();
 
         if (Math.abs(this.currentMoveSpeed) > 0.001) this.model.translateX(this.currentMoveSpeed * delta);
@@ -554,10 +571,8 @@ export class HelicopterPlayer {
 
         this.model.position.y = newY;
 
-        // Check structure collisions with WTGs and Main Base (helipad crash-free)
         if (this.checkCollisions(windFarm, mainBase)) {
-            console.warn("AW189: Structural collision detected with WTG or Main Base!");
-            this.model.position.copy(prevPosition); // Revert position on collision
+            this.model.position.copy(prevPosition); 
             this.isPermanentlyDamaged = true;
             this.hasCrashedIntoStructure = true;
             this.isElectricalOn = false;
@@ -565,12 +580,8 @@ export class HelicopterPlayer {
             this.targetEnginePower = 0.0;
             this.enginePower = 0.0;
             this.isEngineRunning = false;
-            if (this.soundManager) {
-                this.soundManager.stopHelicopterEngine();
-            }
-            if (this.onStructureCrash) {
-                this.onStructureCrash(this.model.position.clone());
-            }
+            if (this.soundManager) this.soundManager.stopHelicopterEngine();
+            if (this.onStructureCrash) this.onStructureCrash(this.model.position.clone());
             return;
         }
 
