@@ -18,6 +18,7 @@ import { RotorWashSystem } from './rotorWashSystem.js';
 import { HelipadDebrisSystem } from './helipadDebrisSystem.js';
 import { DeveloperTool } from './utilities.js';
 import { RescueMission } from './rescueMission.js';
+import { SearchLightSystem } from './searchlight.js';
 
 const { scene, camera, renderer, water, sunLight, ambientLight } = setupScene();
 const weatherSystem = new WeatherSystem();
@@ -38,6 +39,7 @@ let windFarm = null;
 let developerTool = null;
 let liferaftManager = null;
 let rescueMission = null;
+let searchLightSystem = null;
 
 const clock = new THREE.Clock();
 
@@ -234,6 +236,9 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
     const mixer = new THREE.AnimationMixer(model);
     helicopterPlayer = new HelicopterPlayer(model, gltfHeli.animations, mixer, soundManager);
 
+    // Initialize standalone SearchLightSystem module
+    searchLightSystem = new SearchLightSystem(model, scene);
+
     navRadio = new NavRadio(helicopterPlayer, spawnPosition, soundManager);
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
 
@@ -354,6 +359,11 @@ function animate() {
 
     if (rescueMission && helicopterPlayer) {
         rescueMission.update(delta, helicopterPlayer, mainBase);
+    }
+
+    // Update standalone search light system with windFarm, liferaftManager, and rescueMission references
+    if (searchLightSystem && helicopterPlayer) {
+        searchLightSystem.update(delta, helicopterPlayer, weatherData, mainBase, windFarm, liferaftManager, rescueMission);
     }
 
     if (waterSystem && helicopterPlayer) {
