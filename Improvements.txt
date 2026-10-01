@@ -1,6 +1,0 @@
-- Search light automation
-- Sounds
-- Lights
-- Incentive/gameplay, money system, needed to refuel, re-water. Money loss when WTG burning, incentive to put out fire. Also extra income for survivor rescues.
-
-
