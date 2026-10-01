@@ -73,11 +73,6 @@ export class RescueMission {
 
         this._initFallbackMesh();
         this._preloadLiferaft();
-        
-        const initialDelay = 10000 + Math.random() * 20000;
-        setTimeout(() => {
-            this.startMission();
-        }, initialDelay);
     }
 
     _initFallbackMesh() {
@@ -119,11 +114,97 @@ export class RescueMission {
 
             if (this.state === 'ACTIVE' && this.usingFallback) {
                 this._upgradeToGltfRaft();
+            } else if (this.state === 'IDLE') {
+                this.preWarm();
             }
         }, undefined, (err) => {
             this.isRaftLoading = false;
             console.warn("Failed to preload liferaft.glb, will use fallback mesh:", err);
+            if (this.state === 'IDLE') {
+                this.preWarm();
+            }
         });
+    }
+
+    preWarm() {
+        if (this.state !== 'IDLE') return;
+        
+        // Execute a complete end-to-end silent dry-run of all mission stages during the loading screen
+        this.startMission();
+        
+        this.survivorAttached = true;
+        this.state = 'WINCHING';
+        if (this.raftMesh) {
+            this.raftMesh.visible = false;
+        }
+        if (this.survivor) {
+            this.survivor.attachToWinch();
+        }
+        
+        this.state = 'RETURNING';
+        if (this.pagerElement) {
+            this.pagerElement.style.display = 'none';
+        }
+        if (this.survivor) {
+            this.survivor.enterCabin();
+        }
+        if (window.navRadio && window.navRadio.stations[this.rescueFreq]) {
+            delete window.navRadio.stations[this.rescueFreq];
+        }
+        
+        this.state = 'DISEMBARKING';
+        if (this.survivor) {
+            this.survivor.disembarkNextToHelicopter(
+                { x: -14.00, y: 4.80, z: 3.35, rotationY: 1.5533 },
+                1.5533,
+                4.80,
+                true
+            );
+        }
+        
+        const activeRenderer = window.renderer || null;
+        const activeCamera = window.camera || null;
+        if (activeRenderer && activeCamera) {
+            activeRenderer.compile(this.scene, activeCamera);
+        }
+
+        // Clean reset back to IDLE so the first real mission starts fresh after the delay
+        this.state = 'IDLE';
+        if (this.pagerElement) {
+            this.pagerElement.style.display = 'none'; // Forcefully hide pager after pre-warm
+        }
+        if (this.raftMesh) {
+            this.raftMesh.visible = false;
+            this.raftMesh = null;
+        }
+        if (this.flashingLight) {
+            this.flashingLight.intensity = 0;
+        }
+        if (this.survivor && this.survivor.model) {
+            this.survivor.model.position.set(0, -9999, 0);
+            this.survivor.model.visible = false;
+        }
+
+        // Schedule the first actual mission start with standard delay
+        const initialDelay = 1000 + Math.random() * 2000;
+        setTimeout(() => {
+            // Double check loading screen is gone or hidden before showing pager
+            const loadingScreen = document.getElementById('loading-screen') || document.getElementById('loader');
+            const isLoadingVisible = loadingScreen && window.getComputedStyle(loadingScreen).display !== 'none';
+            
+            if (isLoadingVisible) {
+                // If loading screen is somehow still up, wait a bit longer
+                const checkInterval = setInterval(() => {
+                    const stillVisible = loadingScreen && window.getComputedStyle(loadingScreen).display !== 'none';
+                    if (!stillVisible) {
+                        clearInterval(checkInterval);
+                        this.startMission();
+                    }
+                }, 500);
+            } else {
+                this.startMission();
+            }
+        }, initialDelay);
     }
 
     _initUI() {
