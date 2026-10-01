@@ -34,7 +34,6 @@ function optimizeAndWarmUpGltf(gltfScene) {
     });
 
     if (activeRenderer) {
-        // Force WebGL shader compilation and GPU buffer upload immediately on load
         activeRenderer.compile(gltfScene, activeCamera);
     }
 }
@@ -49,7 +48,6 @@ export class RescueMission {
         this.raftMesh = null;
         this.fallbackMesh = null;
         this.raftPosition = new THREE.Vector3();
-        this.flashingLight = null;
         this.flashTimer = 0;
         this.rescueFreq = 270.0;
         this.raftTemplate = null;
@@ -68,8 +66,21 @@ export class RescueMission {
         this.statusDisplay = null;
         this._initUI();
         
-        this.flashingLight = new THREE.PointLight(0xff0000, 0, 35);
+        // World-space point light for illumination
+        this.flashingLight = new THREE.PointLight(0xff5500, 0, 35);
         this.scene.add(this.flashingLight);
+
+        // World-space visible bulb mesh placed on top of the raft (halved size: radius 0.1)
+        const bulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
+        this.flashingMat = new THREE.MeshStandardMaterial({ 
+            color: 0x220000, 
+            emissive: 0xff3300, 
+            emissiveIntensity: 6.0 
+        });
+        this.flashingMesh = new THREE.Mesh(bulbGeo, this.flashingMat);
+        this.flashingMesh.position.set(0, -9999, 0);
+        this.flashingMesh.visible = false;
+        this.scene.add(this.flashingMesh);
 
         this._initFallbackMesh();
         this._preloadLiferaft();
@@ -129,7 +140,6 @@ export class RescueMission {
     preWarm() {
         if (this.state !== 'IDLE') return;
         
-        // Execute a complete end-to-end silent dry-run of all mission stages during the loading screen
         this.startMission();
         
         this.survivorAttached = true;
@@ -168,10 +178,9 @@ export class RescueMission {
             activeRenderer.compile(this.scene, activeCamera);
         }
 
-        // Clean reset back to IDLE so the first real mission starts fresh after the delay
         this.state = 'IDLE';
         if (this.pagerElement) {
-            this.pagerElement.style.display = 'none'; // Forcefully hide pager after pre-warm
+            this.pagerElement.style.display = 'none';
         }
         if (this.raftMesh) {
             this.raftMesh.visible = false;
@@ -180,20 +189,20 @@ export class RescueMission {
         if (this.flashingLight) {
             this.flashingLight.intensity = 0;
         }
+        if (this.flashingMesh) {
+            this.flashingMesh.visible = false;
+        }
         if (this.survivor && this.survivor.model) {
             this.survivor.model.position.set(0, -9999, 0);
             this.survivor.model.visible = false;
         }
 
-        // Schedule the first actual mission start with standard delay
         const initialDelay = 1000 + Math.random() * 2000;
         setTimeout(() => {
-            // Double check loading screen is gone or hidden before showing pager
             const loadingScreen = document.getElementById('loading-screen') || document.getElementById('loader');
             const isLoadingVisible = loadingScreen && window.getComputedStyle(loadingScreen).display !== 'none';
             
             if (isLoadingVisible) {
-                // If loading screen is somehow still up, wait a bit longer
                 const checkInterval = setInterval(() => {
                     const stillVisible = loadingScreen && window.getComputedStyle(loadingScreen).display !== 'none';
                     if (!stillVisible) {
@@ -297,8 +306,13 @@ export class RescueMission {
             this.pagerElement.style.display = 'block';
         }
 
+        // Position light and visible mesh dropped down by 100mm to y = 3.9
         if (this.flashingLight) {
-            this.flashingLight.position.set(this.raftPosition.x, 1.8, this.raftPosition.z);
+            this.flashingLight.position.set(this.raftPosition.x, this.raftPosition.y + 3.9, this.raftPosition.z);
+        }
+        if (this.flashingMesh) {
+            this.flashingMesh.position.set(this.raftPosition.x, this.raftPosition.y + 3.9, this.raftPosition.z);
+            this.flashingMesh.visible = true;
         }
 
         if (this.raftTemplate) {
@@ -380,16 +394,30 @@ export class RescueMission {
         }
         
         this.flashTimer += delta * 7;
-        if (this.flashingLight && !this.survivorAttached) {
-            this.flashingLight.intensity = Math.sin(this.flashTimer) > 0 ? 10.0 : 0.5;
-        } else if (this.flashingLight) {
-            this.flashingLight.intensity = 0;
+        const flash = Math.sin(this.flashTimer) > 0 ? 1 : 0;
+
+        if (!this.survivorAttached) {
+            if (this.flashingLight) {
+                this.flashingLight.intensity = flash ? 10.0 : 0.5;
+            }
+            if (this.flashingMesh && this.flashingMat) {
+                this.flashingMesh.visible = true;
+                this.flashingMat.emissive.setHex(flash ? 0xff3300 : 0x330f00);
+                this.flashingMat.emissiveIntensity = flash ? 6.0 : 0.5;
+            }
+        } else {
+            if (this.flashingLight) {
+                this.flashingLight.intensity = 0;
+            }
+            if (this.flashingMesh) {
+                this.flashingMesh.visible = false;
+            }
         }
 
         if (this.pagerElement && this.pagerElement.style.display === 'block') {
             const led = this.pagerElement.querySelector('#pager-led');
             if (led) {
-                const isOn = Math.sin(this.flashTimer) > 0;
+                const isOn = flash === 1;
                 led.style.backgroundColor = isOn ? '#ff3333' : '#550000';
                 led.style.boxShadow = isOn ? '0 0 5px #ff3333' : 'none';
             }
@@ -421,6 +449,9 @@ export class RescueMission {
                 }
                 if (this.flashingLight) {
                     this.flashingLight.intensity = 0;
+                }
+                if (this.flashingMesh) {
+                    this.flashingMesh.visible = false;
                 }
                 if (this.survivor) {
                     this.survivor.attachToWinch();
@@ -503,6 +534,9 @@ export class RescueMission {
 
             if (this.flashingLight) {
                 this.flashingLight.intensity = 0;
+            }
+            if (this.flashingMesh) {
+                this.flashingMesh.visible = false;
             }
 
             const randomDelay = 120000 + Math.random() * 180000;
