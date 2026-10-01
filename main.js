@@ -122,13 +122,24 @@ const loadingManager = new THREE.LoadingManager(
             console.warn("Loading complete, but helicopter or spawn position missing.");
         }
 
-        const loadingScreen = document.getElementById('loading-screen');
-        if (loadingScreen) {
-            loadingScreen.style.opacity = '0';
-            setTimeout(() => {
-                loadingScreen.style.display = 'none';
-            }, 600);
+        // Force shader compilation and render initial frames behind the loading screen
+        if (renderer && scene && camera) {
+            renderer.compile(scene, camera);
+            renderer.render(scene, camera);
         }
+
+        // Use double requestAnimationFrame to guarantee the first fully-rendered frame is painted before fading out
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) {
+                    loadingScreen.style.opacity = '0';
+                    setTimeout(() => {
+                        loadingScreen.style.display = 'none';
+                    }, 600);
+                }
+            });
+        });
     },
     (url, itemsLoaded, itemsTotal) => {
         const progressPercent = Math.round((itemsLoaded / itemsTotal) * 100);
