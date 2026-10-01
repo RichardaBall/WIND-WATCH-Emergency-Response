@@ -147,7 +147,7 @@ loader.load('helicopter.glb', (gltfHeli) => {
     console.error("Helicopter model failed to load:", error);
 });
 
-// Initialize LiferaftManager, RescueMission, WindFarm and MainBase with loadingManager
+// Initialize LiferaftManager (Crash screen overlay), RescueMission, WindFarm and MainBase with loadingManager
 liferaftManager = new LiferaftManager(scene, loadingManager);
 rescueMission = new RescueMission(scene, loadingManager);
 windFarm = new WindFarm(scene, loadingManager);
@@ -251,21 +251,17 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
     }
 
     const handleCrash = (crashPos, isSea = false) => {
-        if (helicopterPlayer && helicopterPlayer.model) {
-            helicopterPlayer.model.visible = false;
-        }
-        if (heliShadow) {
-            heliShadow.visible = false;
+        if (helicopterPlayer) {
+            helicopterPlayer.isPermanentlyDamaged = true;
+            if (helicopterPlayer.mixer) {
+                helicopterPlayer.mixer.timeScale = 0;
+            }
         }
         if (soundManager) {
             soundManager.stopHelicopterEngine();
-            if (isSea) {
-                soundManager.playSplashSound();
-            }
+            soundManager.playSplashSound(); // Play impact/crash sound on all crash types
         }
-        if (isSea && liferaftManager) {
-            liferaftManager.deploy(crashPos);
-        } else if (liferaftManager) {
+        if (liferaftManager) {
             liferaftManager.showRestart();
         }
 
@@ -299,7 +295,6 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
         handleCrash(crashPos, false);
     };
 
-    // Immediate shader compilation to prevent stuttering on first frame / camera frustum entry
     if (renderer && scene && camera) {
         renderer.compile(scene, camera);
     }
