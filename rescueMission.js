@@ -287,13 +287,31 @@ export class RescueMission {
             this.survivor.update(delta, hookPos);
         }
 
-        if (this.state === 'IDLE' || this.state === 'COMPLETED') return;
+        if (this.state === 'IDLE' || this.state === 'COMPLETED') {
+            if (this.pagerElement) {
+                const led = this.pagerElement.querySelector('#pager-led');
+                if (led) {
+                    led.style.backgroundColor = '#550000';
+                    led.style.boxShadow = 'none';
+                }
+            }
+            return;
+        }
         
+        this.flashTimer += delta * 7;
         if (this.flashingLight && !this.survivorAttached) {
-            this.flashTimer += delta * 7;
             this.flashingLight.intensity = Math.sin(this.flashTimer) > 0 ? 10.0 : 0.5;
         } else if (this.flashingLight) {
             this.flashingLight.intensity = 0;
+        }
+
+        if (this.pagerElement && this.pagerElement.style.display === 'block') {
+            const led = this.pagerElement.querySelector('#pager-led');
+            if (led) {
+                const isOn = Math.sin(this.flashTimer) > 0;
+                led.style.backgroundColor = isOn ? '#ff3333' : '#550000';
+                led.style.boxShadow = isOn ? '0 0 5px #ff3333' : 'none';
+            }
         }
         
         if (!helicopterPlayer || !helicopterPlayer.model) return;
