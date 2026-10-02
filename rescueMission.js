@@ -46,7 +46,7 @@ export class RescueMission {
         this.loadingManager = loadingManager;
         this.mainBase = mainBase;
         
-        this.state = 'IDLE'; // IDLE, ACTIVE, ON_SCENE, WINCHING, RETURNING, DISEMBARKING, RESPAWN_WAIT, COMPLETED
+        this.state = 'IDLE'; 
         this.missionTimer = 0;
         this.isWaitingForMission = false;
 
@@ -120,6 +120,10 @@ export class RescueMission {
         let loadedCount = 0;
 
         files.forEach((file, index) => {
+            if (manager && typeof manager.itemStart === 'function') {
+                manager.itemStart(file);
+            }
+
             loader.load(file, (gltf) => {
                 optimizeAndWarmUpGltf(gltf.scene);
                 const template = gltf.scene;
@@ -139,28 +143,25 @@ export class RescueMission {
                 this.raftMixers[index] = mixer;
                 this.raftAnimationsList[index] = gltf.animations;
 
+                if (manager && typeof manager.itemEnd === 'function') {
+                    manager.itemEnd(file);
+                }
+
                 loadedCount++;
                 if (loadedCount === files.length) {
                     this.isRaftLoading = false;
-                    if (this.state === 'ACTIVE' && this.usingFallback) {
-                        this._upgradeToGltfRaft();
-                    } else if (this.state === 'IDLE' && !this.isWaitingForMission) {
-                        this._scheduleInitialMission();
-                    }
+                    // Once loaded during loading screen, schedule the initial mission timer to start right after
+                    this._scheduleInitialMission();
                 }
             }, undefined, (err) => {
                 console.warn(`Failed to preload ${file}:`, err);
+                if (manager && typeof manager.itemEnd === 'function') {
+                    manager.itemEnd(file);
+                }
                 loadedCount++;
                 if (loadedCount === files.length) {
                     this.isRaftLoading = false;
-                    if (this.raftTemplates.filter(Boolean).length === 0) {
-                        console.warn("All liferaft models failed to load, will use fallback mesh.");
-                    }
-                    if (this.state === 'ACTIVE' && this.usingFallback) {
-                        this._upgradeToGltfRaft();
-                    } else if (this.state === 'IDLE' && !this.isWaitingForMission) {
-                        this._scheduleInitialMission();
-                    }
+                    this._scheduleInitialMission();
                 }
             });
         });
@@ -168,7 +169,7 @@ export class RescueMission {
 
     _scheduleInitialMission() {
         if (this.state !== 'IDLE') return;
-        this.missionTimer = 1.0 + Math.random() * 2.0;
+        this.missionTimer = 5.0 + Math.random() * 5.0; // Short delay after game starts
         this.isWaitingForMission = true;
     }
 
@@ -296,7 +297,7 @@ export class RescueMission {
             chosenOriginalIndex = validIndices[randomPos];
             this.currentRaftIndex = validIndices.indexOf(chosenOriginalIndex);
         } else if (!isUpgrade) {
-            this.currentRaftIndex = (this.currentRaftIndex + 1) % validIndices.length;
+            this.currentRaftIndex = (this.currentRaltIndex || this.currentRaftIndex + 1) % validIndices.length;
             chosenOriginalIndex = validIndices[this.currentRaftIndex];
         } else {
             chosenOriginalIndex = validIndices[this.currentRaftIndex];
@@ -329,10 +330,6 @@ export class RescueMission {
         }
     }
 
-    _upgradeToGltfRaft() {
-        this._selectRaft(true);
-    }
-
     toggleWinch(helicopterPlayer) {
         this.winchSystem.toggleWinch(helicopterPlayer);
         
@@ -362,16 +359,13 @@ export class RescueMission {
 
         if (this.state === 'IDLE') {
             if (this.isWaitingForMission) {
-                const loadingScreen = document.getElementById('loading-screen') || document.getElementById('loader');
-                const isLoadingVisible = loadingScreen && window.getComputedStyle(loadingScreen).display !== 'none';
-                if (!isLoadingVisible) {
-                    this.missionTimer -= delta;
-                    if (this.missionTimer <= 0) {
-                        this.isWaitingForMission = false;
-                        this.startMission();
-                    }
+                this.missionTimer -= delta;
+                if (this.missionTimer <= 0) {
+                    this.isWaitingForMission = false;
+                    this.startMission();
                 }
             }
+
             if (this.pagerElement) {
                 const led = this.pagerElement.querySelector('#pager-led');
                 if (led) {

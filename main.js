@@ -162,7 +162,7 @@ loader.load('helicopter.glb', (gltfHeli) => {
     console.error("Helicopter model failed to load:", error);
 });
 
-// Initialize LiferaftManager (Crash screen overlay), RescueMission, WindFarm and MainBase with loadingManager
+// Initialize LiferaftManager, RescueMission (passing loadingManager), WindFarm and MainBase with loadingManager
 liferaftManager = new LiferaftManager(scene, loadingManager);
 rescueMission = new RescueMission(scene, loadingManager);
 windFarm = new WindFarm(scene, loadingManager);
