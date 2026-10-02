@@ -19,6 +19,7 @@ import { HelipadDebrisSystem } from './helipadDebrisSystem.js';
 import { DeveloperTool } from './utilities.js';
 import { RescueMission } from './rescueMission.js';
 import { SearchLightSystem } from './searchlight.js';
+import { BuoySystem } from './buoy.js';
 
 const { scene, camera, renderer, water, sunLight, ambientLight } = setupScene();
 const weatherSystem = new WeatherSystem();
@@ -40,6 +41,7 @@ let developerTool = null;
 let liferaftManager = null;
 let rescueMission = null;
 let searchLightSystem = null;
+let buoySystem = null;
 
 const clock = new THREE.Clock();
 
@@ -162,15 +164,19 @@ loader.load('helicopter.glb', (gltfHeli) => {
     console.error("Helicopter model failed to load:", error);
 });
 
-// Initialize LiferaftManager, RescueMission (passing loadingManager), WindFarm and MainBase with loadingManager
+// Initialize LiferaftManager, RescueMission, WindFarm, BuoySystem, and MainBase with loadingManager
 liferaftManager = new LiferaftManager(scene, loadingManager);
 rescueMission = new RescueMission(scene, loadingManager);
 windFarm = new WindFarm(scene, loadingManager);
+buoySystem = new BuoySystem(scene, loadingManager);
 
 mainBase = new MainBase(scene, loadingManager, (spawnPosition) => {
     loadedSpawnPosition = spawnPosition;
     // Initialize standalone lighting system anchored to helipad center
     lightingSystem = new LightingSystem(scene, mainBase.helipadCenter);
+    if (buoySystem) {
+        buoySystem.setHelipadPosition(mainBase.helipadCenter);
+    }
 });
 
 function initGameAfterLoad(gltfHeli, spawnPosition) {
@@ -250,7 +256,9 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
     // Initialize standalone SearchLightSystem module
     searchLightSystem = new SearchLightSystem(model, scene);
 
-    navRadio = new NavRadio(helicopterPlayer, spawnPosition, soundManager);
+    // Pass buoySystem directly into NavRadio so 210 kHz points to the Approach Buoy
+    navRadio = new NavRadio(helicopterPlayer, spawnPosition, soundManager, buoySystem);
+
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
 
     developerTool = new DeveloperTool(weatherSystem, windFarm, mainBase, helicopterPlayer, camera, renderer, rescueMission ? rescueMission.winchSystem : null);
@@ -362,6 +370,10 @@ function animate() {
     if (windFarm) {
         const heliPos = (helicopterPlayer && helicopterPlayer.model) ? helicopterPlayer.model.position : null;
         windFarm.update(delta, heliPos, waterSystem);
+    }
+
+    if (buoySystem) {
+        buoySystem.update(delta);
     }
 
     if (sirenSystem) {

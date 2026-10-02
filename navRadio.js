@@ -5,9 +5,10 @@
 import * as THREE from 'three';
 
 export class NavRadio {
-    constructor(player, rigAlphaPosition, soundManager) {
+    constructor(player, rigAlphaPosition, soundManager, buoySystem = null) {
         this.player = player;
         this.soundManager = soundManager;
+        this.buoySystem = buoySystem;
         this.powered = true;
         window.navRadio = this;
 
@@ -22,9 +23,12 @@ export class NavRadio {
         const wtg2Pos = new THREE.Vector3(Math.cos(1 * angleStep) * (baseRadius + radiusIncrement), 0, Math.sin(1 * angleStep) * (baseRadius + radiusIncrement)).add(basePos);
         const wtg3Pos = new THREE.Vector3(Math.cos(2 * angleStep) * (baseRadius + (radiusIncrement * 2)), 0, Math.sin(2 * angleStep) * (baseRadius + (radiusIncrement * 2))).add(basePos);
 
-        // Station registry linking exact frequencies to Main Base and each wind turbine
+        // Station registry: 210 kHz mapped to Approach Buoy, replacing Rig Alpha
         this.stations = {
-            210: { name: 'RIG ALPHA', position: basePos },
+            210: { 
+                name: 'APPROACH BUOY', 
+                position: () => (this.buoySystem ? this.buoySystem.getNDBPosition() : basePos) 
+            },
             350: { name: 'WTG #1 (350 kHz)', position: wtg1Pos },
             240: { name: 'WTG #2 (240 kHz)', position: wtg2Pos },
             290: { name: 'WTG #3 (290 kHz)', position: wtg3Pos }
@@ -44,10 +48,20 @@ export class NavRadio {
         this.setupEventListeners();
     }
 
+    setBuoySystem(buoySystem) {
+        this.buoySystem = buoySystem;
+    }
+
+    addStation(frequency, name, position) {
+        const roundedFreq = Math.round(frequency);
+        this.stations[roundedFreq] = { name, position };
+    }
+
     getTargetPosition() {
         const roundedFreq = Math.round(this.frequency);
         const station = this.stations[roundedFreq];
-        return station ? station.position : null;
+        if (!station) return null;
+        return typeof station.position === 'function' ? station.position() : station.position;
     }
 
     isTuned() {
@@ -62,7 +76,7 @@ export class NavRadio {
         const existingToggle = document.getElementById('nav-radio-toggle-btn');
         if (existingToggle) existingToggle.remove();
 
-        // Bottom-Right Nav Radio Toggle Icon Button (Transparent / No Background)
+        // Bottom-Right Nav Radio Toggle Icon Button
         this.toggleBtn = document.createElement('button');
         this.toggleBtn.id = 'nav-radio-toggle-btn';
         this.toggleBtn.title = 'Toggle NDB Navigation Radio [N]';
@@ -150,7 +164,7 @@ export class NavRadio {
 
             <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center; padding: 0 2px;">
                 <div style="font-size: 7px; color: #9ca3af; line-height: 1.3;">
-                    <div id="nav-station-label">RIG ALPHA</div>
+                    <div id="nav-station-label">APPROACH BUOY</div>
                     <div style="font-size: 6px; color: #6b7280;">SCROLL TO TUNE</div>
                 </div>
                 <div id="nav-tuning-knob" title="Scroll to tune frequency" style="width: 30px; height: 30px; background: radial-gradient(circle at 35% 35%, #4b5563, #1f2937); border-radius: 50%; border: 1.5px solid #374151; box-shadow: 0 3px 6px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; transition: transform 0.15s ease-out; transform: rotate(0deg);">
