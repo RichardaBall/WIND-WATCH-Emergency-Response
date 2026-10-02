@@ -119,6 +119,7 @@ export class Kneeboard {
                 <div style="display: flex; justify-content: space-between;"><span>Battery Switch:</span><strong>[Q]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Fuel Pump Prime:</span><strong>[F]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Engine Ignition:</span><strong>[E]</strong></div>
+                <div style="display: flex; justify-content: space-between;"><span>Navigation Radio:</span><strong>[N]</strong></div>
             </div>
 
             <div style="margin-bottom: 7px; font-size: 11px;">
