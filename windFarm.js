@@ -43,6 +43,8 @@ export class WindFarm {
                 }
             });
 
+            // Original line configuration base distance reference (~377m magnitude),
+            // making the first turbine start at twice that distance (~750m) in a circle layout.
             const baseRadius = 750;
             const radiusIncrement = 180;
             const angleStep = (Math.PI * 2) / 3; // Distribute in a circular arc pattern around main base (0,0,0)
@@ -52,7 +54,7 @@ export class WindFarm {
                 turbineGroup.frustumCulled = false;
 
                 const currentRadius = baseRadius + (i * radiusIncrement);
-                const currentAngle = i * angleStep;
+                const currentAngle = i * angleStep; // Spread around the circle
 
                 const xPos = Math.cos(currentAngle) * currentRadius;
                 const zPos = Math.sin(currentAngle) * currentRadius;
@@ -115,17 +117,11 @@ export class WindFarm {
 
                 turbineGroup.add(lightGroup);
 
-                // Tower bounding box extending from base up to the nacelle top (~85 units height), hidden by default
-                const defaultBboxConfig = { offsetX: 0, offsetY: 42.5, offsetZ: 0, sizeX: 6, sizeY: 85, sizeZ: 6 };
-                const bboxMesh = this.createBoundingBoxMesh(defaultBboxConfig, false);
-                turbineGroup.add(bboxMesh);
-
                 this.turbines.push({
                     group: turbineGroup,
                     rotor: rotorMesh,
                     light: light,
                     bulb: bulb,
-                    bboxMesh: bboxMesh,
                     rotationSpeed: 1.2 + (i * 0.2) + Math.random() * 0.4,
                     timeOffset: i * 2.5 + Math.random() * 5
                 });
@@ -138,62 +134,17 @@ export class WindFarm {
 
             this.initFireVFX();
 
+            // Spawn first fire immediately on a random WTG upon startup
             if (this.turbines.length > 0 && !this.fireSpawnTriggered) {
                 this.spawnFire();
                 this.fireSpawnTriggered = true;
             }
 
-            console.log("Successfully spawned 3 circular wind turbines with full-height tower bounding boxes (hidden by default).");
+            console.log("Successfully spawned 3 circular wind turbines with disabled frustum culling to prevent entry stutter.");
 
         }, undefined, (error) => {
             console.error("WTG model failed to load for wind farm:", error);
         });
-    }
-
-    createBoundingBoxMesh(config, visible = false) {
-        const geo = new THREE.BoxGeometry(config.sizeX, config.sizeY, config.sizeZ);
-        const mat = new THREE.MeshBasicMaterial({
-            color: 0x38bdf8,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.4
-        });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(config.offsetX, config.offsetY, config.offsetZ);
-        mesh.visible = false; // Forced invisible to player
-        return mesh;
-    }
-
-    applyBoundingBox(config, visible = false) {
-        this.turbines.forEach((turbine) => {
-            if (turbine.bboxMesh) {
-                turbine.group.remove(turbine.bboxMesh);
-                turbine.bboxMesh.geometry.dispose();
-            }
-            const newMesh = this.createBoundingBoxMesh(config, false);
-            turbine.group.add(newMesh);
-            turbine.bboxMesh = newMesh;
-        });
-    }
-
-    setBoundingBoxVisibility(visible) {
-        this.turbines.forEach((turbine) => {
-            if (turbine.bboxMesh) {
-                turbine.bboxMesh.visible = false; // Forced invisible
-            }
-        });
-    }
-
-    getCollisionBoxes() {
-        const boxes = [];
-        this.turbines.forEach((turbine) => {
-            if (turbine.bboxMesh) {
-                const box = new THREE.Box3();
-                box.setFromObject(turbine.bboxMesh);
-                boxes.push(box);
-            }
-        });
-        return boxes;
     }
 
     initFireVFX() {
@@ -320,6 +271,7 @@ export class WindFarm {
         if (this.fireParticleSystem) this.fireParticleSystem.visible = false;
         if (this.smokeParticleSystem) this.smokeParticleSystem.visible = false;
 
+        // Set cooldown between 1 and 3 minutes (60 to 180 seconds)
         this.cooldownTimer = Math.random() * 120 + 60;
         console.log(`[WTG FIRE] Next fire will spawn in ${(this.cooldownTimer / 60).toFixed(1)} minutes.`);
     }
@@ -331,7 +283,23 @@ export class WindFarm {
             this.scene.userData.activeFireIndex = this.activeFireIndex;
         }
 
+        // If no active fire, count down the timer to spawn the next random fire
         if (this.activeFireIndex === -1 && this.turbines.length > 0) {
+            const heli = (helicopterPosition && helicopterPosition.model) ? helicopterPosition : null;
+            if (heli && heli.model) {
+                const activeGroundLevel = heli.getCurrentGroundLevel ? heli.getCurrentGroundLevel() : -999;
+                const isLandedOnHelipad = activeGroundLevel > 0 && Math.abs(heli.model.position.y - activeGroundLevel) <= 0.2;
+                const maxFuel = heli.maxFuelKg || 1000;
+                const maxWater = heli.maxWaterTankKg || 1500;
+                const isFullFuel = (heli.fuelKg || 0) >= (maxFuel - 1.0);
+                const isFullWater = (heli.waterTankKg || 0) >= (maxWater - 1.0);
+
+                if (isLandedOnHelipad && isFullFuel && isFullWater && this.cooldownTimer > 30.0) {
+                    this.cooldownTimer = 30.0;
+                    console.log(`[WTG FIRE] Landed on helipad with full fuel & water — fire spawn timer capped to 30s.`);
+                }
+            }
+
             this.cooldownTimer -= delta;
             if (this.cooldownTimer <= 0) {
                 this.spawnFire();
@@ -432,8 +400,9 @@ export class WindFarm {
         }
 
         this.turbines.forEach((turbine) => {
-            if (helicopterPosition) {
-                const distSq = turbine.group.position.distanceToSquared(helicopterPosition);
+            const heliPos = (helicopterPosition && helicopterPosition.model) ? helicopterPosition.model.position : helicopterPosition;
+            if (heliPos) {
+                const distSq = turbine.group.position.distanceToSquared(heliPos);
                 if (distSq > cullDistanceSq) {
                     return;
                 }
