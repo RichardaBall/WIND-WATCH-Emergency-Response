@@ -19,6 +19,8 @@ export class DeveloperTool {
         this.orbitControls = null;
         this.isCollisionEnabled = true;
         this.isPaused = false;
+        this.isFastForwarding = false;
+        this.fastForwardMultiplier = 10.0; // 10x speed when holding fast forward
 
         if (this.camera && this.renderer) {
             this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -82,7 +84,7 @@ export class DeveloperTool {
             <div style="margin-bottom: 14px;">
                 <label style="display: block; color: #94a3b8; margin-bottom: 6px; font-size: 11px; text-transform: uppercase;">Weather Condition</label>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
-                    <button id="dev-btn-fine" style="background: #0ea5e9; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">☀️️ Fine Weather</button>
+                    <button id="dev-btn-fine" style="background: #0ea5e9; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">☀ Fine Weather</button>
                     <button id="dev-btn-rain" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">🌧️ Rain</button>
                     <button id="dev-btn-storm" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">⚡ Storm</button>
                 </div>
@@ -96,8 +98,11 @@ export class DeveloperTool {
                 <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                     <button id="dev-free-cam" style="flex: 1; background: #7c3aed; border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">📷 Free Camera: OFF</button>
                 </div>
-                <div style="display: flex; gap: 6px;">
+                <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                     <button id="dev-pause" style="flex: 1; background: #eab308; border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">⏸️ Pause Game: OFF</button>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                    <button id="dev-fast-forward" style="flex: 1; background: #0284c7; border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">⏩ Hold to Fast Forward (10x)</button>
                 </div>
             </div>
 
@@ -156,6 +161,28 @@ export class DeveloperTool {
         document.getElementById('dev-pause').addEventListener('click', () => {
             this.togglePause();
         });
+
+        // Fast forward press-and-hold handlers
+        const ffBtn = document.getElementById('dev-fast-forward');
+        if (ffBtn) {
+            const startFF = (e) => {
+                e.preventDefault();
+                this.isFastForwarding = true;
+                ffBtn.style.background = '#0369a1';
+                ffBtn.style.transform = 'scale(0.98)';
+            };
+            const endFF = (e) => {
+                e.preventDefault();
+                this.isFastForwarding = false;
+                ffBtn.style.background = '#0284c7';
+                ffBtn.style.transform = 'scale(1)';
+            };
+
+            ffBtn.addEventListener('mousedown', startFF);
+            window.addEventListener('mouseup', endFF);
+            ffBtn.addEventListener('touchstart', startFF);
+            window.addEventListener('touchend', endFF);
+        }
     }
 
     toggleCollision() {
@@ -168,7 +195,7 @@ export class DeveloperTool {
         const btn = document.getElementById('dev-collision');
         if (btn) {
             btn.style.background = this.isCollisionEnabled ? '#10b981' : '#dc2626';
-            btn.textContent = `🛡️️ Collision: ${this.isCollisionEnabled ? 'ON' : 'OFF'}`;
+            btn.textContent = `🛡 Collision: ${this.isCollisionEnabled ? 'ON' : 'OFF'}`;
         }
     }
 
@@ -248,8 +275,18 @@ export class DeveloperTool {
         const update = () => {
             requestAnimationFrame(update);
             const currentTime = performance.now();
-            const delta = Math.min((currentTime - lastTime) / 1000, 0.1);
+            let delta = Math.min((currentTime - lastTime) / 1000, 0.1);
             lastTime = currentTime;
+
+            if (this.isPaused) return;
+
+            if (this.isFastForwarding) {
+                delta *= this.fastForwardMultiplier;
+                // Also optionally scale weather time propagation if integrated
+                if (this.weatherSystem && typeof this.weatherSystem.update === 'function') {
+                    // Weather system updates relative to delta time passed to it in main.js
+                }
+            }
 
             if (this.isTransitioning && this.camera && this.orbitControls) {
                 this.transitionProgress += delta / this.transitionDuration;
@@ -290,7 +327,7 @@ export class DeveloperTool {
                 let vertDelta = 0;
                 if (this.keysDown['KeyE'] || this.keysDown['Space']) vertDelta += moveSpeed;
                 if (this.keysDown['KeyQ'] || this.keysDown['ControlLeft']) vertDelta -= moveSpeed;
-                if (vertDelta !== 0) {
+                if (vertDelta !==0) {
                     this.camera.position.y += vertDelta;
                     this.orbitControls.target.y += vertDelta;
                     this.orbitControls.update();

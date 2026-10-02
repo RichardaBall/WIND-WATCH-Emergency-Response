@@ -334,7 +334,11 @@ function animate() {
         return;
     }
 
-    const delta = clock.getDelta();
+    let delta = clock.getDelta();
+
+    if (developerTool && developerTool.isFastForwarding) {
+        delta *= developerTool.fastForwardMultiplier;
+    }
 
     if (water && water.material && water.material.uniforms && water.material.uniforms['time']) {
         water.material.uniforms['time'].value += delta * 0.3;

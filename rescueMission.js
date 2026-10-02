@@ -8,16 +8,18 @@ function optimizeAndWarmUpGltf(gltfScene) {
     const activeRenderer = window.renderer || null;
     const activeCamera = window.camera || new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
 
-    gltfScene.traverse((child) => {
+    gltfScene.traverse(function(child) {
         if (child.isMesh) {
             child.frustumCulled = false;
             child.updateMatrixWorld(true);
 
             if (child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
+                for (let i = 0; i < materials.length; i++) {
+                    const mat = materials[i];
                     const mapKeys = ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'emissiveMap', 'aoMap', 'alphaMap'];
-                    mapKeys.forEach(key => {
+                    for (let j = 0; j < mapKeys.length; j++) {
+                        const key = mapKeys[j];
                         if (mat[key]) {
                             mat[key].generateMipmaps = false;
                             mat[key].minFilter = THREE.LinearFilter;
@@ -26,9 +28,9 @@ function optimizeAndWarmUpGltf(gltfScene) {
                                 activeRenderer.initTexture(mat[key]);
                             }
                         }
-                    });
+                    }
                     mat.needsUpdate = true;
-                });
+                }
             }
         }
     });
@@ -44,7 +46,10 @@ export class RescueMission {
         this.loadingManager = loadingManager;
         this.mainBase = mainBase;
         
-        this.state = 'IDLE'; // IDLE, ACTIVE, ON_SCENE, WINCHING, RETURNING, DISEMBARKING, COMPLETED
+        this.state = 'IDLE'; // IDLE, ACTIVE, ON_SCENE, WINCHING, RETURNING, DISEMBARKING, RESPAWN_WAIT, COMPLETED
+        this.missionTimer = 0;
+        this.isWaitingForMission = false;
+
         this.raftMesh = null;
         this.fallbackMesh = null;
         this.raftPosition = new THREE.Vector3();
@@ -56,7 +61,7 @@ export class RescueMission {
         this.raftMixer = null;
         this.isRaftLoading = false;
         this.usingFallback = false;
-        this.currentRaftIndex = null; // Tracks the alternation sequence
+        this.currentRaftIndex = null;
         
         this.winchSystem = new WinchSystem(scene, loadingManager);
         this.survivor = new Survivor(scene, loadingManager);
@@ -69,11 +74,9 @@ export class RescueMission {
         this.statusDisplay = null;
         this._initUI();
         
-        // World-space point light for illumination
         this.flashingLight = new THREE.PointLight(0xff5500, 0, 35);
         this.scene.add(this.flashingLight);
 
-        // World-space visible bulb mesh placed on top of the raft (halved size: radius 0.1)
         const bulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
         this.flashingMat = new THREE.MeshStandardMaterial({ 
             color: 0x220000, 
@@ -141,7 +144,7 @@ export class RescueMission {
                     this.isRaftLoading = false;
                     if (this.state === 'ACTIVE' && this.usingFallback) {
                         this._upgradeToGltfRaft();
-                    } else if (this.state === 'IDLE') {
+                    } else if (this.state === 'IDLE' && !this.isWaitingForMission) {
                         this._scheduleInitialMission();
                     }
                 }
@@ -155,7 +158,7 @@ export class RescueMission {
                     }
                     if (this.state === 'ACTIVE' && this.usingFallback) {
                         this._upgradeToGltfRaft();
-                    } else if (this.state === 'IDLE') {
+                    } else if (this.state === 'IDLE' && !this.isWaitingForMission) {
                         this._scheduleInitialMission();
                     }
                 }
@@ -165,24 +168,8 @@ export class RescueMission {
 
     _scheduleInitialMission() {
         if (this.state !== 'IDLE') return;
-
-        const initialDelay = 1000 + Math.random() * 2000;
-        setTimeout(() => {
-            const loadingScreen = document.getElementById('loading-screen') || document.getElementById('loader');
-            const isLoadingVisible = loadingScreen && window.getComputedStyle(loadingScreen).display !== 'none';
-            
-            if (isLoadingVisible) {
-                const checkInterval = setInterval(() => {
-                    const stillVisible = loadingScreen && window.getComputedStyle(loadingScreen).display !== 'none';
-                    if (!stillVisible) {
-                        clearInterval(checkInterval);
-                        this.startMission();
-                    }
-                }, 500);
-            } else {
-                this.startMission();
-            }
-        }, initialDelay);
+        this.missionTimer = 1.0 + Math.random() * 2.0;
+        this.isWaitingForMission = true;
     }
 
     _initUI() {
@@ -330,9 +317,6 @@ export class RescueMission {
             action.reset().play();
         }
 
-        // Model-specific light height offsets:
-        // Index 0 = liferaft.glb (3.9)
-        // Index 1 = liferaft2.glb (adjust 2.5 as needed)
         const lightHeights = [3.9, 2.1];
         const heightOffset = lightHeights[chosenOriginalIndex] !== undefined ? lightHeights[chosenOriginalIndex] : 3.9;
 
@@ -352,7 +336,7 @@ export class RescueMission {
     toggleWinch(helicopterPlayer) {
         this.winchSystem.toggleWinch(helicopterPlayer);
         
-        if (this.winchSystem.winchState === 'DOWN' && this.statusDisplay && this.state !== 'IDLE' && this.state !== 'COMPLETED') {
+        if (this.winchSystem.winchState === 'DOWN' && this.statusDisplay && this.state !== 'IDLE' && this.state !== 'COMPLETED' && this.state !== 'RESPAWN_WAIT') {
             this.statusDisplay.textContent = `HOOK DOWN. HOVER`;
         }
     }
@@ -376,7 +360,45 @@ export class RescueMission {
             this.survivor.update(delta, hookPos);
         }
 
-        if (this.state === 'IDLE' || this.state === 'COMPLETED') {
+        if (this.state === 'IDLE') {
+            if (this.isWaitingForMission) {
+                const loadingScreen = document.getElementById('loading-screen') || document.getElementById('loader');
+                const isLoadingVisible = loadingScreen && window.getComputedStyle(loadingScreen).display !== 'none';
+                if (!isLoadingVisible) {
+                    this.missionTimer -= delta;
+                    if (this.missionTimer <= 0) {
+                        this.isWaitingForMission = false;
+                        this.startMission();
+                    }
+                }
+            }
+            if (this.pagerElement) {
+                const led = this.pagerElement.querySelector('#pager-led');
+                if (led) {
+                    led.style.backgroundColor = '#550000';
+                    led.style.boxShadow = 'none';
+                }
+            }
+            return;
+        }
+
+        if (this.state === 'RESPAWN_WAIT') {
+            this.missionTimer -= delta;
+            if (this.missionTimer <= 0) {
+                this.state = 'IDLE';
+                this._scheduleInitialMission();
+            }
+            if (this.pagerElement) {
+                const led = this.pagerElement.querySelector('#pager-led');
+                if (led) {
+                    led.style.backgroundColor = '#550000';
+                    led.style.boxShadow = 'none';
+                }
+            }
+            return;
+        }
+
+        if (this.state === 'COMPLETED') {
             if (this.pagerElement) {
                 const led = this.pagerElement.querySelector('#pager-led');
                 if (led) {
@@ -520,7 +542,7 @@ export class RescueMission {
         }
 
         if (this.state === 'DISEMBARKING' && this.survivor && this.survivor.currentState === SurvivorState.COMPLETED) {
-            this.state = 'COMPLETED';
+            this.state = 'RESPAWN_WAIT';
 
             if (this.pagerElement) {
                 this.pagerElement.style.display = 'none';
@@ -533,11 +555,7 @@ export class RescueMission {
                 this.flashingMesh.visible = false;
             }
 
-            const randomDelay = 120000 + Math.random() * 180000;
-            setTimeout(() => {
-                this.state = 'IDLE';
-                this.startMission();
-            }, randomDelay);
+            this.missionTimer = 120 + Math.random() * 180;
         }
     }
 }
