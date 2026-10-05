@@ -117,7 +117,7 @@ export class Survivor {
     }, renderer = null) {
         const loader = this.loadingManager ? new GLTFLoader(this.loadingManager) : new GLTFLoader();
 
-        const dracoLoader = new DRACOLoader();
+        const dracoLoader = new DRACOLoader(this.loadingManager);
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
 

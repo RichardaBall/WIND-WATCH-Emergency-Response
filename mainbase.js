@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 export class MainBase {
     constructor(scene, loadingManager, onLoadedCallback) {
@@ -18,7 +19,12 @@ export class MainBase {
     }
 
     loadBase(loadingManager, onLoadedCallback) {
+        const dracoLoader = new DRACOLoader(loadingManager);
+        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+
         const loader = loadingManager ? new GLTFLoader(loadingManager) : new GLTFLoader();
+        loader.setDRACOLoader(dracoLoader);
+
         loader.load('mainbase.glb', (gltf) => {
             this.model = gltf.scene;
             this.model.position.set(0, 0, 0);

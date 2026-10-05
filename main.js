@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { setupScene } from './sceneSetup.js';
 import { WeatherSystem } from './weather.js';
 import { InputManager } from './inputManager.js';
@@ -155,7 +156,12 @@ const loadingManager = new THREE.LoadingManager(
     }
 );
 
+// Configure DRACOLoader instance and attach to GLTFLoader
+const dracoLoader = new DRACOLoader(loadingManager);
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+
 const loader = new GLTFLoader(loadingManager);
+loader.setDRACOLoader(dracoLoader);
 
 // Preload helicopter model via loadingManager
 loader.load('helicopter.glb', (gltfHeli) => {
