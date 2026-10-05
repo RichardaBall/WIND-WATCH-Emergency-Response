@@ -4,6 +4,7 @@ export class LiferaftManager {
     constructor(scene, loadingManager = null) {
         this.scene = scene;
         this.isDeployed = false;
+        this.onRestartCallback = null;
 
         // Full-screen solid black crash overlay with message and restart button
         this.crashOverlay = document.createElement('div');
@@ -72,7 +73,9 @@ export class LiferaftManager {
         });
 
         this.restartBtn.addEventListener('click', () => {
-            location.reload();
+            if (typeof this.onRestartCallback === 'function') {
+                this.onRestartCallback();
+            }
         });
 
         this.crashOverlay.appendChild(this.restartBtn);
@@ -85,11 +88,26 @@ export class LiferaftManager {
         this.showRestart();
     }
 
-    showRestart() {
+    showRestart(callback) {
+        if (typeof callback === 'function') {
+            this.onRestartCallback = callback;
+        }
         if (this.crashOverlay) {
             this.crashOverlay.style.opacity = '1';
             this.crashOverlay.style.pointerEvents = 'auto';
         }
+    }
+
+    hideRestart() {
+        if (this.crashOverlay) {
+            this.crashOverlay.style.opacity = '0';
+            this.crashOverlay.style.pointerEvents = 'none';
+        }
+        this.isDeployed = false;
+    }
+
+    clearRafts() {
+        // Clear active liferafts or rescue assets from scene if applicable
     }
 
     update(delta) {

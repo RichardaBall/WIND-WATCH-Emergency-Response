@@ -115,6 +115,52 @@ window.addEventListener('DOMContentLoaded', () => {
 let loadedGltfHeli = null;
 let loadedSpawnPosition = null;
 
+function respawnGame() {
+    if (!helicopterPlayer || !loadedSpawnPosition) return;
+
+    helicopterPlayer.respawn(loadedSpawnPosition);
+
+    if (waterSystem && typeof waterSystem.clear === 'function') {
+        waterSystem.clear();
+    }
+
+    if (liferaftManager) {
+        if (typeof liferaftManager.hideRestart === 'function') {
+            liferaftManager.hideRestart();
+        }
+        if (typeof liferaftManager.clearRafts === 'function') {
+            liferaftManager.clearRafts();
+        }
+    }
+
+    if (rescueMission && typeof rescueMission.reset === 'function') {
+        rescueMission.reset();
+    }
+
+    if (kneeboard && kneeboard.domElement) {
+        kneeboard.domElement.style.display = 'block';
+    }
+
+    if (navRadio && navRadio.container) {
+        navRadio.container.style.display = 'block';
+    }
+
+    if (camera && inputManager) {
+        const elevationAngle = 45 * (Math.PI / 180);
+        const cosAlpha = Math.cos(elevationAngle);
+        const sinAlpha = Math.sin(elevationAngle);
+        const diagFactor = 0.7071;
+        const dist = inputManager.cameraDistance || 30;
+        const offsetX = dist * cosAlpha * diagFactor;
+        const offsetY = dist * sinAlpha;
+        const offsetZ = dist * cosAlpha * diagFactor;
+
+        const initialCamPos = loadedSpawnPosition.clone().add(new THREE.Vector3(offsetX, offsetY, offsetZ));
+        camera.position.copy(initialCamPos);
+        camera.lookAt(loadedSpawnPosition);
+    }
+}
+
 // Initialize Loading Manager to track asset loading progress across all models globally
 const loadingManager = new THREE.LoadingManager(
     () => {
@@ -296,7 +342,9 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
             soundManager.playSplashSound();
         }
         if (liferaftManager) {
-            liferaftManager.showRestart();
+            liferaftManager.showRestart(() => {
+                respawnGame();
+            });
         }
 
         if (kneeboard && kneeboard.domElement) {

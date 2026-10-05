@@ -211,6 +211,67 @@ export class HelicopterPlayer {
         this.wasOnGround = true;
     }
 
+    respawn(spawnPosition) {
+        if (spawnPosition && this.model) {
+            this.model.position.copy(spawnPosition);
+            this.model.rotation.set(0, 0, 0);
+        }
+
+        this.hasCrashedInSea = false;
+        this.hasCrashedOnHelipad = false;
+        this.hasCrashedIntoStructure = false;
+        this.isPermanentlyDamaged = false;
+
+        this.isElectricalOn = false;
+        this.isFuelPumpOn = false;
+        this.isEngineRunning = false;
+        this.enginePower = 0.0;
+        this.targetEnginePower = 0.0;
+        this.fuelStarvationTimer = 0.0;
+
+        this.isGearUp = false;
+        for (let name in this.actions) {
+            if (name.toLowerCase().includes('gear') || name.toLowerCase().includes('landing')) {
+                const gearAction = this.actions[name];
+                gearAction.stop();
+                gearAction.reset();
+            }
+        }
+
+        this.fuelKg = this.maxFuelKg;
+        this.waterTankKg = 1000;
+
+        this.currentMoveSpeed = 0.0;
+        this.currentStrafeSpeed = 0.0;
+        this.currentTurnSpeed = 0.0;
+        this.currentAltitudeSpeed = 0.0;
+
+        this.wasOnGround = true;
+
+        if (this.mixer) {
+            this.mixer.timeScale = 1;
+        }
+
+        for (let name in this.actions) {
+            if (name.toLowerCase().includes('rotor') || name.toLowerCase().includes('armature') || name.includes('Арматура')) {
+                const action = this.actions[name];
+                if (action.isRunning()) action.stop();
+            }
+        }
+
+        if (this.strobeLight) {
+            this.strobeLight.intensity = 0;
+            this.strobeLight.color.copy(this.strobeOriginalColor);
+        }
+        if (this.strobeBulbMesh) {
+            this.strobeBulbMesh.visible = false;
+        }
+        if (this.navRedLight) this.navRedLight.intensity = 0;
+        if (this.navRedBulbMesh) this.navRedBulbMesh.visible = false;
+        if (this.navGreenLight) this.navGreenLight.intensity = 0;
+        if (this.navGreenBulbMesh) this.navGreenBulbMesh.visible = false;
+    }
+
     getTotalMass() {
         return this.dryWeightKg + this.fuelKg + this.waterTankKg;
     }
