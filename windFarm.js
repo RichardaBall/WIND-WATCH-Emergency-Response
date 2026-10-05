@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
 export class WindFarm {
     constructor(scene, loadingManager) {
@@ -31,7 +32,13 @@ export class WindFarm {
         this.waterHitsRequired = 30;
         this.currentWaterHits = 0;
 
+        // Configure DRACOLoader for compressed glTF models
+        const dracoLoader = new DRACOLoader(loadingManager);
+        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+
         const loader = loadingManager ? new GLTFLoader(loadingManager) : new GLTFLoader();
+        loader.setDRACOLoader(dracoLoader);
+
         loader.load('WTG.glb', (gltf) => {
             const baseModel = gltf.scene;
 

@@ -150,7 +150,6 @@ export class RescueMission {
                 loadedCount++;
                 if (loadedCount === files.length) {
                     this.isRaftLoading = false;
-                    // Once loaded during loading screen, schedule the initial mission timer to start right after
                     this._scheduleInitialMission();
                 }
             }, undefined, (err) => {
@@ -169,7 +168,7 @@ export class RescueMission {
 
     _scheduleInitialMission() {
         if (this.state !== 'IDLE') return;
-        this.missionTimer = 5.0 + Math.random() * 5.0; // Short delay after game starts
+        this.missionTimer = 5.0 + Math.random() * 5.0;
         this.isWaitingForMission = true;
     }
 
@@ -266,8 +265,10 @@ export class RescueMission {
         this._selectRaft(false);
 
         if (this.survivor) {
+            // Position survivor model (raising.glb) below the raft so it is completely hidden underwater
+            const hiddenSurvivorPos = new THREE.Vector3(this.raftPosition.x, -3.0, this.raftPosition.z);
             this.survivor.spawnOnRaft(
-                this.raftPosition, 
+                hiddenSurvivorPos, 
                 Math.random() * Math.PI * 2
             );
         }
@@ -283,9 +284,10 @@ export class RescueMission {
             this.usingFallback = true;
             this.raftMesh = this.fallbackMesh;
             this.raftMesh.position.copy(this.raftPosition);
+            this.raftMesh.position.y = -1.2;
             this.raftMesh.visible = true;
 
-            const lightY = this.raftPosition.y + 3.9;
+            const lightY = this.raftPosition.y + 3.9 - 1.2;
             if (this.flashingLight) this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
             if (this.flashingMesh) this.flashingMesh.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
             return;
@@ -297,7 +299,7 @@ export class RescueMission {
             chosenOriginalIndex = validIndices[randomPos];
             this.currentRaftIndex = validIndices.indexOf(chosenOriginalIndex);
         } else if (!isUpgrade) {
-            this.currentRaftIndex = (this.currentRaltIndex || this.currentRaftIndex + 1) % validIndices.length;
+            this.currentRaftIndex = (this.currentRaftIndex + 1) % validIndices.length;
             chosenOriginalIndex = validIndices[this.currentRaftIndex];
         } else {
             chosenOriginalIndex = validIndices[this.currentRaftIndex];
@@ -308,7 +310,13 @@ export class RescueMission {
         }
         this.usingFallback = false;
         this.raftMesh = this.raftTemplates[chosenOriginalIndex];
+
+        // Increased negative Y offsets to push raft models lower into water level
+        const raftYOffsets = [-1.90, -1.95];
+        const raftYOffset = raftYOffsets[chosenOriginalIndex] !== undefined ? raftYOffsets[chosenOriginalIndex] : -2.20;
+
         this.raftMesh.position.copy(this.raftPosition);
+        this.raftMesh.position.y = raftYOffset;
         this.raftMesh.visible = true;
 
         this.raftMixer = this.raftMixers[chosenOriginalIndex];
@@ -321,7 +329,7 @@ export class RescueMission {
         const lightHeights = [3.9, 2.1];
         const heightOffset = lightHeights[chosenOriginalIndex] !== undefined ? lightHeights[chosenOriginalIndex] : 3.9;
 
-        const lightY = this.raftPosition.y + heightOffset;
+        const lightY = this.raftPosition.y + raftYOffset + heightOffset;
         if (this.flashingLight) {
             this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
         }
