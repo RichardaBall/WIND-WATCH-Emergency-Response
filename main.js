@@ -22,6 +22,7 @@ import { RescueMission } from './rescueMission.js';
 import { SearchLightSystem } from './searchlight.js';
 import { BuoySystem } from './buoy.js';
 import { Shark } from './shark.js';
+import { SharkCatchSystem } from './sharkcatch.js';
 
 const { scene, camera, renderer, water, sunLight, ambientLight } = setupScene();
 const weatherSystem = new WeatherSystem();
@@ -45,6 +46,7 @@ let rescueMission = null;
 let searchLightSystem = null;
 let buoySystem = null;
 let shark = null;
+let sharkCatchSystem = null;
 
 const clock = new THREE.Clock();
 
@@ -156,6 +158,10 @@ function respawnGame() {
         rescueMission.reset();
     }
 
+    if (sharkCatchSystem && shark) {
+        sharkCatchSystem.reset(shark);
+    }
+
     if (kneeboard && kneeboard.domElement) {
         kneeboard.domElement.style.display = 'block';
     }
@@ -235,7 +241,7 @@ loader.load('helicopter.glb', (gltfHeli) => {
     console.error("Helicopter model failed to load:", error);
 });
 
-// Initialize LiferaftManager, RescueMission, WindFarm, BuoySystem, MainBase, and Shark
+// Initialize LiferaftManager, RescueMission, WindFarm, BuoySystem, MainBase, Shark, and SharkCatchSystem
 liferaftManager = new LiferaftManager(scene, loadingManager);
 rescueMission = new RescueMission(scene, loadingManager);
 windFarm = new WindFarm(scene, loadingManager);
@@ -243,6 +249,9 @@ buoySystem = new BuoySystem(scene, loadingManager);
 
 // Instantiate shark using built-in class defaults
 shark = new Shark(scene, loadingManager);
+
+// Instantiate shark catching system
+sharkCatchSystem = new SharkCatchSystem(scene, loadingManager);
 
 mainBase = new MainBase(scene, loadingManager, (spawnPosition) => {
     loadedSpawnPosition = spawnPosition;
@@ -315,6 +324,9 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
 
     const mixer = new THREE.AnimationMixer(model);
     helicopterPlayer = new HelicopterPlayer(model, gltfHeli.animations, mixer, soundManager);
+
+    // Link rescueMission reference to player for winch system lookup
+    helicopterPlayer.rescueMission = rescueMission;
 
     // Initialize standalone SearchLightSystem module
     searchLightSystem = new SearchLightSystem(model, scene);
@@ -439,6 +451,10 @@ function animate() {
 
     if (shark) {
         shark.update(delta);
+    }
+
+    if (sharkCatchSystem && helicopterPlayer && shark) {
+        sharkCatchSystem.update(delta, helicopterPlayer, shark);
     }
 
     if (sirenSystem) {

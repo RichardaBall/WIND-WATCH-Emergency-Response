@@ -52,6 +52,10 @@ export class WinchSystem {
 
         this.maxOperatingSpeed = 25.0;
         this.cableSpeed = 12.0;
+
+        // Exposed properties for external systems (e.g. SharkCatchSystem)
+        this.maxCableLength = 30.0;
+        this.currentCableLength = 0.0;
         
         this._initWinchMeshes();
     }
@@ -119,12 +123,17 @@ export class WinchSystem {
         return this.winchHookMesh ? this.winchHookMesh.position : new THREE.Vector3();
     }
 
+    getHookWorldPosition() {
+        return this.winchHookMesh ? this.winchHookMesh.position.clone() : new THREE.Vector3();
+    }
+
     update(delta, helicopterPlayer) {
         if (!helicopterPlayer || !helicopterPlayer.model) return;
 
         if (helicopterPlayer.hasCrashedInSea || helicopterPlayer.isPermanentlyDamaged || !helicopterPlayer.model.visible) {
             this.winchState = 'UP';
             this.winchHeight = 0;
+            this.currentCableLength = 0;
             if (this.winchHookMesh) this.winchHookMesh.visible = false;
             if (this.winchCableLine) this.winchCableLine.visible = false;
             return;
@@ -151,8 +160,10 @@ export class WinchSystem {
         mountOffset.applyQuaternion(helicopterPlayer.model.quaternion);
         const heliBottomPos = heliPos.clone().add(mountOffset);
         
-        const targetSeaLevel = 0;
-        const maxExtension = Math.max(5.0, heliPos.y - targetSeaLevel);
+        // Calculate max extension to extend 2.0m into the water (Y <= 0) from heli bottom position
+        const waterDepthMargin = 2.0;
+        const maxExtension = Math.max(5.0, heliBottomPos.y + waterDepthMargin);
+        this.maxCableLength = maxExtension;
 
         if (this.winchState === 'LOWERING') {
             this.winchHeight += delta * this.cableSpeed;
@@ -169,6 +180,8 @@ export class WinchSystem {
                 this.winchCableLine.visible = false;
             }
         }
+
+        this.currentCableLength = this.winchHeight;
 
         const hookPos = heliBottomPos.clone().add(new THREE.Vector3(0, -this.winchHeight, 0));
         if (this.winchHookMesh && this.winchCableLine) {

@@ -75,6 +75,24 @@ export class Shark {
     );
   }
 
+  /**
+   * Sets current visibility of shark mesh.
+   * @param {boolean} visible 
+   */
+  setVisibility(visible) {
+    if (this.mesh) {
+      this.mesh.visible = visible;
+    }
+  }
+
+  /**
+   * Returns current world position of shark mesh.
+   * @returns {THREE.Vector3|null}
+   */
+  getPosition() {
+    return this.mesh ? this.mesh.position.clone() : null;
+  }
+
   update(delta) {
     if (!this.mesh) return;
 
