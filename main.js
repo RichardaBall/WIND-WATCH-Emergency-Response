@@ -21,6 +21,7 @@ import { DeveloperTool } from './utilities.js';
 import { RescueMission } from './rescueMission.js';
 import { SearchLightSystem } from './searchlight.js';
 import { BuoySystem } from './buoy.js';
+import { Shark } from './shark.js';
 
 const { scene, camera, renderer, water, sunLight, ambientLight } = setupScene();
 const weatherSystem = new WeatherSystem();
@@ -43,6 +44,7 @@ let liferaftManager = null;
 let rescueMission = null;
 let searchLightSystem = null;
 let buoySystem = null;
+let shark = null;
 
 const clock = new THREE.Clock();
 
@@ -233,11 +235,14 @@ loader.load('helicopter.glb', (gltfHeli) => {
     console.error("Helicopter model failed to load:", error);
 });
 
-// Initialize LiferaftManager, RescueMission, WindFarm, BuoySystem, and MainBase with loadingManager
+// Initialize LiferaftManager, RescueMission, WindFarm, BuoySystem, MainBase, and Shark
 liferaftManager = new LiferaftManager(scene, loadingManager);
 rescueMission = new RescueMission(scene, loadingManager);
 windFarm = new WindFarm(scene, loadingManager);
 buoySystem = new BuoySystem(scene, loadingManager);
+
+// Instantiate shark using built-in class defaults
+shark = new Shark(scene, loadingManager);
 
 mainBase = new MainBase(scene, loadingManager, (spawnPosition) => {
     loadedSpawnPosition = spawnPosition;
@@ -322,7 +327,7 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
     developerTool = new DeveloperTool(weatherSystem, windFarm, mainBase, helicopterPlayer, camera, renderer, rescueMission ? rescueMission.winchSystem : null);
 
     if (camera && inputManager) {
-        const elevationAngle = 45 * (Math.PI / 180); 
+        const elevationAngle = 45 * (Math.PI / 180);
         const cosAlpha = Math.cos(elevationAngle);
         const sinAlpha = Math.sin(elevationAngle);
         const diagFactor = 0.7071;
@@ -430,6 +435,10 @@ function animate() {
 
     if (buoySystem) {
         buoySystem.update(delta);
+    }
+
+    if (shark) {
+        shark.update(delta);
     }
 
     if (sirenSystem) {
