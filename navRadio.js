@@ -95,7 +95,7 @@ export class NavRadio {
             justify-content: center;
             transition: transform 0.2s, opacity 0.2s, color 0.2s;
             opacity: 0.8;
-            color: #ffffff;
+            color: #00ff00;
         `;
         this.toggleBtn.innerHTML = `
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -132,7 +132,7 @@ export class NavRadio {
             color: #d1d5db;
             padding: 10px;
             z-index: 10000;
-            display: none;
+            display: block;
             user-select: none;
             pointer-events: auto;
         `;
