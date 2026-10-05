@@ -37,7 +37,7 @@ export class HelicopterPlayer {
                     this.navRedLight = child;
                 } else if (child.color.g > 0.5 && child.color.r < 0.2 && child.color.b < 0.2) {
                     this.navGreenLight = child;
-                } else if (child.color.r > 0.8 && child.color.g > 0.8 && child.color.b > 0.8 || child.position.y > 3.0) {
+                } else if ((child.color.r > 0.8 && child.color.g > 0.8 && child.color.b > 0.8) || child.position.y > 3.0) {
                     this.strobeLight = child;
                     this.strobeOriginalColor.copy(child.color);
                 }
@@ -99,20 +99,6 @@ export class HelicopterPlayer {
             this.model.add(this.strobeBulbMesh);
         }
         this.strobeBulbMesh.position.copy(this.strobeOffset);
-        
-        window.addEventListener('keydown', (event) => {
-            if (event.ctrlKey && event.code === 'KeyW') {
-                event.preventDefault();
-            }
-
-            if (event.code === 'KeyP') {
-                console.log(
-                    `%c [SPAWN COORDINATES FOUND] `, 
-                    'background: #222; color: #bada55; padding: 4px; font-weight: bold;', 
-                    `new THREE.Vector3(${this.model.position.x.toFixed(4)}, ${this.model.position.y.toFixed(4)}, ${this.model.position.z.toFixed(4)})`
-                );
-            }
-        });
         
         if (animations && Array.isArray(animations)) {
             animations.forEach((clip) => {
@@ -203,9 +189,10 @@ export class HelicopterPlayer {
         this.currentTurnSpeed = 0.0;
         this.currentAltitudeSpeed = 0.0;
 
-        this.helipadAltitude = 5.336;
+        // --- Exact Helipad Level (Wheels down on pad) ---
+        this.helipadAltitude = 4.996;
         this.seaLevel = 0.0;
-        this.landingHeightOffset = 0.9; 
+        this.landingHeightOffset = -0.9; 
         this.maxCeilingFeet = 400.0;
 
         this.wasOnGround = true;
@@ -282,7 +269,7 @@ export class HelicopterPlayer {
         const distanceFromHelipad = currentPos2D.distanceTo(helipadCenter);
 
         if (distanceFromHelipad < 12.0) {
-            return this.helipadAltitude + this.landingHeightOffset;
+            return this.helipadAltitude + (this.isGearUp ? this.landingHeightOffset : 0.0);
         }
         return -999.0;
     }
@@ -413,7 +400,7 @@ export class HelicopterPlayer {
         const currentPos2D = new THREE.Vector2(this.model.position.x, this.model.position.z);
         const distanceFromHelipad = currentPos2D.distanceTo(helipadCenter2D);
 
-        if (this.model.position.y <= this.landingHeightOffset && distanceFromHelipad >= 12.0) {
+        if (this.model.position.y <= this.helipadAltitude + this.landingHeightOffset && distanceFromHelipad >= 12.0) {
             this.hasCrashedInSea = true;
             if (this.soundManager) {
                 this.soundManager.stopHelicopterEngine();

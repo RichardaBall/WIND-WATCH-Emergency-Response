@@ -8,9 +8,10 @@ export class MainBase {
         this.group = new THREE.Group();
         this.scene.add(this.group);
 
-        // Your exact locked spawn position for the helicopter
-        this.explicitSpawnPosition = new THREE.Vector3(3.3690, 6.2360, 0.4548);
-        this.helipadCenter = new THREE.Vector3(this.explicitSpawnPosition.x, 5.336, this.explicitSpawnPosition.z);
+        // Updated spawn position for calibrated Y height (wheels on pad)
+        this.helicopterSpawnPos = new THREE.Vector3(3.3690, 4.996, 0.4548);
+        this.explicitSpawnPosition = this.helicopterSpawnPos;
+        this.helipadCenter = new THREE.Vector3(this.explicitSpawnPosition.x, 4.996, this.explicitSpawnPosition.z);
 
         this.model = null;
         this.bboxMeshes = [];
