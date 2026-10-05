@@ -50,6 +50,7 @@ let redLight, greenLight, strobeLight, landingLight, cockpitLight;
 let redBulb, greenBulb, strobeBulb;
 let heliLightsGroup;
 let heliShadow = null;
+let cachedShadowTexture = null;
 
 // Global single keydown event listener for helicopter systems (Q, F, E, G, X)
 window.addEventListener('keydown', (e) => {
@@ -115,6 +116,22 @@ window.addEventListener('DOMContentLoaded', () => {
 let loadedGltfHeli = null;
 let loadedSpawnPosition = null;
 
+function createShadowTexture() {
+    if (cachedShadowTexture) return cachedShadowTexture;
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
+    gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    cachedShadowTexture = new THREE.CanvasTexture(canvas);
+    return cachedShadowTexture;
+}
+
 function respawnGame() {
     if (!helicopterPlayer || !loadedSpawnPosition) return;
 
@@ -171,13 +188,13 @@ const loadingManager = new THREE.LoadingManager(
             console.warn("Loading complete, but helicopter or spawn position missing.");
         }
 
-        // Force shader compilation and render initial frames behind the loading screen
+        // Single asynchronous compilation pass to prevent GPU stalls
         if (renderer && scene && camera) {
             renderer.compile(scene, camera);
             renderer.render(scene, camera);
         }
 
-        // Use double requestAnimationFrame to guarantee the first fully-rendered frame is painted before fading out
+        // Double rAF ensures render queue clears before hiding loading screen
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 const loadingScreen = document.getElementById('loading-screen');
@@ -202,7 +219,7 @@ const loadingManager = new THREE.LoadingManager(
     }
 );
 
-// Configure DRACOLoader instance and attach to GLTFLoader
+// Configure DRACOLoader instance with the exact valid Google CDN decoder path
 const dracoLoader = new DRACOLoader(loadingManager);
 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
 
@@ -239,19 +256,8 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
     try {
         const shadowGeo = new THREE.PlaneGeometry(4.0, 4.0);
         shadowGeo.rotateX(-Math.PI / 2);
-        
-        const canvas = document.createElement('canvas');
-        canvas.width = 128;
-        canvas.height = 128;
-        const ctx = canvas.getContext('2d');
-        const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-        gradient.addColorStop(0, 'rgba(0, 0, 0, 0.7)');
-        gradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
-        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 128, 128);
 
-        const shadowTexture = new THREE.CanvasTexture(canvas);
+        const shadowTexture = createShadowTexture();
         const shadowMat = new THREE.MeshBasicMaterial({
             map: shadowTexture,
             transparent: true,
@@ -376,10 +382,6 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
         console.log("AW189: Structural collision crash sustained at position:", crashPos);
         handleCrash(crashPos, false);
     };
-
-    if (renderer && scene && camera) {
-        renderer.compile(scene, camera);
-    }
 }
 
 function animate() {
