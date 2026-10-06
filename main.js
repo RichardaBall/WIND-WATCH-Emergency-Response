@@ -23,6 +23,7 @@ import { SearchLightSystem } from './searchlight.js';
 import { BuoySystem } from './buoy.js';
 import { Shark } from './shark.js';
 import { SharkCatchSystem } from './sharkcatch.js';
+import { AssetWarmupSystem } from './assetWarmup.js';
 
 const { scene, camera, renderer, water, sunLight, ambientLight } = setupScene();
 const weatherSystem = new WeatherSystem();
@@ -196,11 +197,24 @@ const loadingManager = new THREE.LoadingManager(
             console.warn("Loading complete, but helicopter or spawn position missing.");
         }
 
-        // Single asynchronous compilation pass to prevent GPU stalls
-        if (renderer && scene && camera) {
-            renderer.compile(scene, camera);
-            renderer.render(scene, camera);
+        // Trigger rescue mission warmup to pre-compile raft and survivor assets
+        if (rescueMission && typeof rescueMission.warmup === 'function') {
+            rescueMission.warmup(renderer, camera);
         }
+
+        // Collect all subsystem model references to ensure zero missing assets during compile
+        const extraModels = [
+            shark ? shark.mesh : null,
+            sharkCatchSystem ? sharkCatchSystem.caughtSharkMesh : null,
+            rescueMission ? rescueMission.fallbackMesh : null,
+            rescueMission && rescueMission.survivor ? rescueMission.survivor.mesh : null,
+            rescueMission && rescueMission.survivor ? rescueMission.survivor.raisingMesh : null,
+            rescueMission && rescueMission.survivor ? rescueMission.survivor.walkingMesh : null,
+            rescueMission && rescueMission.survivor ? rescueMission.survivor.wavingMesh : null,
+        ];
+
+        // Execute pre-compilation warm-up to upload all shaders & textures before starting flight
+        AssetWarmupSystem.warmup(renderer, scene, camera, extraModels);
 
         // Double rAF ensures render queue clears before hiding loading screen
         requestAnimationFrame(() => {

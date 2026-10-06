@@ -4,14 +4,18 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { WinchSystem } from './winch.js';
 import { Survivor, SurvivorState } from './survivor.js';
 
-function optimizeAndWarmUpGltf(gltfScene) {
-    const activeRenderer = window.renderer || null;
-    const activeCamera = window.camera || new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+function optimizeAndWarmUpGltf(gltfScene, renderer = null, camera = null) {
+    const activeRenderer = renderer || window.renderer || null;
+    const activeCamera = camera || window.camera || null;
 
     gltfScene.traverse(function(child) {
         if (child.isMesh) {
             child.frustumCulled = false;
             child.updateMatrixWorld(true);
+
+            if (child.isSkinnedMesh && child.skeleton) {
+                child.skeleton.update();
+            }
 
             if (child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -23,19 +27,17 @@ function optimizeAndWarmUpGltf(gltfScene) {
                         if (mat[key]) {
                             mat[key].generateMipmaps = false;
                             mat[key].minFilter = THREE.LinearFilter;
-                            mat[key].needsUpdate = true;
                             if (activeRenderer && typeof activeRenderer.initTexture === 'function') {
                                 activeRenderer.initTexture(mat[key]);
                             }
                         }
                     }
-                    mat.needsUpdate = true;
                 }
             }
         }
     });
 
-    if (activeRenderer) {
+    if (activeRenderer && activeCamera) {
         activeRenderer.compile(gltfScene, activeCamera);
     }
 }
@@ -92,6 +94,75 @@ export class RescueMission {
         this._preloadLiferaft();
     }
 
+    /**
+     * Executes a pre-spawning WebGL compile pass on all liferafts, survivors, lights,
+     * and fallback geometries to eliminate runtime spawn lag.
+     */
+    warmup(renderer, camera) {
+        if (!renderer || !camera) return;
+
+        const hiddenObjects = [];
+        const culledObjects = [];
+
+        const targets = [
+            this.fallbackMesh,
+            this.flashingMesh
+        ];
+
+        this.raftTemplates.forEach((template) => {
+            if (template) targets.push(template);
+        });
+
+        if (this.survivor) {
+            if (this.survivor.mesh) targets.push(this.survivor.mesh);
+            if (this.survivor.raisingMesh) targets.push(this.survivor.raisingMesh);
+            if (this.survivor.walkingMesh) targets.push(this.survivor.walkingMesh);
+            if (this.survivor.wavingMesh) targets.push(this.survivor.wavingMesh);
+        }
+
+        targets.forEach((obj) => {
+            if (!obj) return;
+            obj.traverse((child) => {
+                if (!child.visible) {
+                    child.visible = true;
+                    hiddenObjects.push(child);
+                }
+                if (child.isMesh) {
+                    if (child.frustumCulled) {
+                        child.frustumCulled = false;
+                        culledObjects.push(child);
+                    }
+                    child.updateMatrixWorld(true);
+                    if (child.isSkinnedMesh && child.skeleton) {
+                        child.skeleton.update();
+                    }
+                    if (child.material) {
+                        const mats = Array.isArray(child.material) ? child.material : [child.material];
+                        mats.forEach((m) => {
+                            m.needsUpdate = true;
+                        });
+                    }
+                }
+            });
+        });
+
+        // Prime animation mixers
+        this.raftMixers.forEach((mixer) => {
+            if (mixer) mixer.update(0.01);
+        });
+        if (this.survivor && this.survivor.mixer) {
+            this.survivor.mixer.update(0.01);
+        }
+
+        // Perform GPU shader compilation and offscreen render pass
+        renderer.compile(this.scene, camera);
+        renderer.render(this.scene, camera);
+
+        // Restore original hidden and frustum-culled states
+        hiddenObjects.forEach((child) => { child.visible = false; });
+        culledObjects.forEach((child) => { child.frustumCulled = true; });
+    }
+
     _initFallbackMesh() {
         const geo = new THREE.CylinderGeometry(2, 2, 0.8, 16);
         const mat = new THREE.MeshStandardMaterial({ color: 0xff5500 });
@@ -112,7 +183,7 @@ export class RescueMission {
             : THREE.DefaultLoadingManager;
         const loader = new GLTFLoader(manager);
         
-        const dracoLoader = new DRACOLoader();
+        const dracoLoader = new DRACOLoader(manager);
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
 
@@ -265,7 +336,6 @@ export class RescueMission {
         this._selectRaft(false);
 
         if (this.survivor) {
-            // Position survivor model (raising.glb) below the raft so it is completely hidden underwater
             const hiddenSurvivorPos = new THREE.Vector3(this.raftPosition.x, -3.0, this.raftPosition.z);
             this.survivor.spawnOnRaft(
                 hiddenSurvivorPos, 
@@ -311,7 +381,6 @@ export class RescueMission {
         this.usingFallback = false;
         this.raftMesh = this.raftTemplates[chosenOriginalIndex];
 
-        // Increased negative Y offsets to push raft models lower into water level
         const raftYOffsets = [-1.90, -1.95];
         const raftYOffset = raftYOffsets[chosenOriginalIndex] !== undefined ? raftYOffsets[chosenOriginalIndex] : -2.20;
 
