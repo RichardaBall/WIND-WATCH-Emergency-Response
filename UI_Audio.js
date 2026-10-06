@@ -7,6 +7,9 @@ export class UIAudio {
         this.sprayFilterNode = null;
         this.sprayGainNode = null;
         this.isSpraySoundPlaying = false;
+
+        // Landing Gear Audio Buffer
+        this.gearBuffer = null;
     }
 
     playToggleSwitchSound(isOn) {
@@ -122,11 +125,39 @@ export class UIAudio {
         }
     }
 
-    playLandingGearSound(isRetracting) {
+    async playLandingGearSound(isRetracting) {
         try {
             this.ctxMgr.ensureContextRunning();
             if (!this.ctxMgr.audioCtx || this.ctxMgr.isMuted) return;
 
+            if (!this.gearBuffer) {
+                try {
+                    const response = await fetch('gear.mp3');
+                    if (response.ok) {
+                        const arrayBuffer = await response.arrayBuffer();
+                        this.gearBuffer = await this.ctxMgr.audioCtx.decodeAudioData(arrayBuffer);
+                    }
+                } catch (err) {
+                    console.warn("Failed to load gear.mp3, falling back to procedural synth:", err);
+                }
+            }
+
+            if (this.gearBuffer) {
+                const now = this.ctxMgr.audioCtx.currentTime;
+                const source = this.ctxMgr.audioCtx.createBufferSource();
+                source.buffer = this.gearBuffer;
+
+                const gainNode = this.ctxMgr.audioCtx.createGain();
+                gainNode.gain.setValueAtTime(0.8, now);
+
+                source.connect(gainNode);
+                gainNode.connect(this.ctxMgr.masterGain);
+
+                source.start(now);
+                return;
+            }
+
+            // Fallback procedural motor sound if file loading fails
             const now = this.ctxMgr.audioCtx.currentTime;
             const duration = 1.8;
 
