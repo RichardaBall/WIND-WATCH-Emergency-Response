@@ -6,6 +6,8 @@ export class Kneeboard {
         this.windFarmRef = null;
         this.currentPage = 0;
         this.totalPages = 4;
+        this.isFuelDragging = false;
+        this.isWaterDragging = false;
         this.createElement();
         this.initListeners();
     }
@@ -19,8 +21,8 @@ export class Kneeboard {
         this.container.id = 'pilot-kneeboard';
         this.container.style.cssText = `
             position: absolute;
-            bottom: 70px;
-            left: 20px;
+            bottom: 30px;
+            left: 30px;
             width: 350px;
             background: #d8d0b0;
             border: 4px solid #4a4532;
@@ -35,39 +37,13 @@ export class Kneeboard {
             pointer-events: auto;
         `;
 
-        // Bottom-Left Kneeboard Toggle Icon Button (Transparent / No Background)
-        this.toggleBtn = document.createElement('button');
-        this.toggleBtn.id = 'kneeboard-toggle-btn';
-        this.toggleBtn.title = 'Toggle Pilot Kneeboard [K]';
-        this.toggleBtn.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            padding: 4px;
-            z-index: 1000;
-            user-select: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: transform 0.2s, opacity 0.2s, color 0.2s;
-            opacity: 0.8;
-            color: #00ff00;
-        `;
-        this.toggleBtn.innerHTML = `
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                <line x1="9" y1="12" x2="15" y2="12"></line>
-                <line x1="9" y1="16" x2="13" y2="16"></line>
-            </svg>
-        `;
-        this.toggleBtn.addEventListener('click', () => this.toggle());
-        this.toggleBtn.addEventListener('mouseenter', () => this.toggleBtn.style.opacity = '1.0');
-        this.toggleBtn.addEventListener('mouseleave', () => this.toggleBtn.style.opacity = '0.8');
-        document.body.appendChild(this.toggleBtn);
+        // Prevent all pointer/mouse/touch/wheel events from bubbling to canvas or orbit controls
+        const stopEvents = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'mousedown', 'mousemove', 'mouseup', 'click', 'input', 'wheel', 'touchstart', 'touchmove', 'touchend'];
+        stopEvents.forEach(eventType => {
+            this.container.addEventListener(eventType, (e) => {
+                e.stopPropagation();
+            });
+        });
 
         // Metallic binder clip at the top
         const clip = document.createElement('div');
@@ -119,7 +95,6 @@ export class Kneeboard {
                 <div style="display: flex; justify-content: space-between;"><span>Battery Switch:</span><strong>[Q]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Fuel Pump Prime:</span><strong>[F]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Engine Ignition:</span><strong>[E]</strong></div>
-                <div style="display: flex; justify-content: space-between;"><span>Navigation Radio:</span><strong>[N]</strong></div>
             </div>
 
             <div style="margin-bottom: 7px; font-size: 11px;">
@@ -139,11 +114,6 @@ export class Kneeboard {
                 <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">4. FIREFIGHTING & UI</div>
                 <div style="display: flex; justify-content: space-between;"><span>Water Spray:</span><strong>Hold [Space]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Toggle Kneeboard:</span><strong>[K]</strong></div>
-            </div>
-
-            <div style="margin-bottom: 7px; font-size: 11px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">5. RESCUE</div>
-                <div style="display: flex; justify-content: space-between;"><span>Winch:</span><strong>[X]</strong></div>
             </div>
 
             <div style="font-size: 11px; border-top: 1px dashed #6b634b; padding-top: 5px; margin-top: 5px;">
@@ -193,17 +163,11 @@ export class Kneeboard {
                 <div style="display: flex; justify-content: space-between;"><span>• Landing Light:</span><strong>AS REQ [L]</strong></div>
             </div>
 
-            <div style="margin-bottom: 7px; font-size: 11px;">
+            <div style="font-size: 11px;">
                 <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">5. SHUTDOWN</div>
                 <div style="display: flex; justify-content: space-between;"><span>• Fuel Pump:</span><strong>OFF [F]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>• Engine Cutoff:</span><strong>OFF [E]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>• Battery Switch:</span><strong>OFF [Q]</strong></div>
-            </div>
-
-            <div style="font-size: 11px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">6. WINCH OPERATION</div>
-                <div style="display: flex; justify-content: space-between;"><span>• Landing Gear:</span><strong>UP [G]</strong></div>
-                <div style="display: flex; justify-content: space-between;"><span>• Winch Up/Down:</span><strong>[X]</strong></div>
             </div>
         `;
 
@@ -214,19 +178,19 @@ export class Kneeboard {
             <div style="font-weight: bold; text-align: center; text-decoration: underline; font-size: 12px; margin-bottom: 8px; color: #3a3525; letter-spacing: 0.5px;">MANIFEST</div>
 
             <div style="margin-bottom: 10px; font-size: 11px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">REFUEL MANIFEST</div>
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">REFUEL MANIFEST (Max 1000 kg)</div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
                     <span>Fuel Load:</span><span><strong id="kb-fuel-val">1000</strong> kg</span>
                 </div>
-                <input type="range" id="kb-fuel-slider" min="0" max="1500" value="1000" step="10" style="width: 100%; accent-color: #4a4532; cursor: pointer;">
+                <input type="range" id="kb-fuel-slider" min="0" max="1000" value="1000" step="10" style="width: 100%; accent-color: #4a4532; cursor: pointer;">
             </div>
 
             <div style="margin-bottom: 10px; font-size: 11px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">WATER TANK MANIFEST (Max 1500 kg)</div>
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">WATER TANK MANIFEST (Max 1000 kg)</div>
                 <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
                     <span>Water Load:</span><span><strong id="kb-water-val">1000</strong> kg</span>
                 </div>
-                <input type="range" id="kb-water-slider" min="0" max="1500" value="1000" step="10" style="width: 100%; accent-color: #2675b4; cursor: pointer;">
+                <input type="range" id="kb-water-slider" min="0" max="1000" value="1000" step="10" style="width: 100%; accent-color: #2675b4; cursor: pointer;">
             </div>
 
             <div style="margin-bottom: 10px; font-size: 11px;">
@@ -234,9 +198,9 @@ export class Kneeboard {
                 <div style="background: #c9bf9b; border: 2px solid #4a4532; border-radius: 4px; padding: 8px; text-align: center;">
                     <div style="font-size: 10px; font-weight: bold; margin-bottom: 6px; color: #1c4e80;">[ FIREFIGHTING TANK ]</div>
                     <div style="width: 100%; background: #b0a682; height: 18px; border: 1px solid #4a4532; border-radius: 3px; overflow: hidden; position: relative;">
-                        <div id="kb-water-bar" style="width: 66.6%; height: 100%; background: linear-gradient(90deg, #38bdf8, #0284c7); transition: width 0.1s ease-out;"></div>
+                        <div id="kb-water-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #38bdf8, #0284c7); transition: width 0.1s ease-out;"></div>
                         <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8);">
-                            <span id="kb-water-pct">67</span>%
+                            <span id="kb-water-pct">100</span>%
                         </div>
                     </div>
                 </div>
@@ -368,15 +332,24 @@ export class Kneeboard {
 
         document.body.appendChild(this.container);
 
-        // Slider listeners
+        // Slider listeners with explicit drag state tracking & bounds clamping
         const fuelSlider = this.container.querySelector('#kb-fuel-slider');
         if (fuelSlider) {
+            fuelSlider.addEventListener('pointerdown', (e) => { 
+                e.stopPropagation();
+                this.isFuelDragging = true; 
+            });
+            fuelSlider.addEventListener('pointerup', () => { this.isFuelDragging = false; });
+            fuelSlider.addEventListener('pointercancel', () => { this.isFuelDragging = false; });
+            fuelSlider.addEventListener('change', () => { this.isFuelDragging = false; });
+
             fuelSlider.addEventListener('input', (e) => {
                 if (this.playerRef && this.isConfigAllowed(this.playerRef)) {
                     const val = parseFloat(e.target.value);
-                    this.playerRef.fuelKg = val;
+                    const maxFuel = this.playerRef.maxFuelKg || 1000;
+                    this.playerRef.fuelKg = Math.max(0, Math.min(val, maxFuel));
                     const valEl = document.getElementById('kb-fuel-val');
-                    if (valEl) valEl.innerText = val;
+                    if (valEl) valEl.innerText = Math.round(this.playerRef.fuelKg);
                     this.updateManifestDisplay();
                 }
             });
@@ -384,13 +357,22 @@ export class Kneeboard {
 
         const waterSlider = this.container.querySelector('#kb-water-slider');
         if (waterSlider) {
+            waterSlider.addEventListener('pointerdown', (e) => { 
+                e.stopPropagation();
+                this.isWaterDragging = true; 
+            });
+            waterSlider.addEventListener('pointerup', () => { this.isWaterDragging = false; });
+            waterSlider.addEventListener('pointercancel', () => { this.isWaterDragging = false; });
+            waterSlider.addEventListener('change', () => { this.isWaterDragging = false; });
+
             waterSlider.addEventListener('input', (e) => {
                 if (this.playerRef && this.isConfigAllowed(this.playerRef)) {
                     const val = parseFloat(e.target.value);
-                    this.playerRef.waterTankKg = val;
+                    const maxWater = this.playerRef.maxWaterTankKg || 1000;
+                    this.playerRef.waterTankKg = Math.max(0, Math.min(val, maxWater));
                     const waterValEl = document.getElementById('kb-water-val');
-                    if (waterValEl) waterValEl.innerText = val;
-                    this.updateWaterBarVisuals(val);
+                    if (waterValEl) waterValEl.innerText = Math.round(this.playerRef.waterTankKg);
+                    this.updateWaterBarVisuals(this.playerRef.waterTankKg);
                     this.updateManifestDisplay();
                 }
             });
@@ -459,9 +441,6 @@ export class Kneeboard {
     toggle() {
         this.visible = !this.visible;
         this.container.style.display = this.visible ? 'block' : 'none';
-        if (this.toggleBtn) {
-            this.toggleBtn.style.color = this.visible ? '#00ff00' : '#ffffff';
-        }
     }
 
     isConfigAllowed(player) {
@@ -475,7 +454,7 @@ export class Kneeboard {
     }
 
     updateWaterBarVisuals(waterKg) {
-        const maxWater = 1500;
+        const maxWater = this.playerRef ? (this.playerRef.maxWaterTankKg || 1000) : 1000;
         const pct = Math.max(0, Math.min(100, Math.round((waterKg / maxWater) * 100)));
         const waterBar = document.getElementById('kb-water-bar');
         const waterPct = document.getElementById('kb-water-pct');
@@ -486,14 +465,14 @@ export class Kneeboard {
     updateManifestDisplay() {
         const fuelSlider = document.getElementById('kb-fuel-slider');
         const waterSlider = document.getElementById('kb-water-slider');
-        const fuelVal = fuelSlider ? parseFloat(fuelSlider.value) : 1000;
-        const waterVal = waterSlider ? parseFloat(waterSlider.value) : 1000;
+        const fuelVal = fuelSlider ? parseFloat(fuelSlider.value) : (this.playerRef ? this.playerRef.fuelKg : 1000);
+        const waterVal = waterSlider ? parseFloat(waterSlider.value) : (this.playerRef ? this.playerRef.waterTankKg : 1000);
 
         const totalMassEl = document.getElementById('kb-total-mass');
-        if (totalMassEl) {
-            const emptyWeight = 4600;
+        if (totalMassEl && this.playerRef) {
+            const emptyWeight = this.playerRef.dryWeightKg || 4600;
             const total = emptyWeight + fuelVal + waterVal;
-            totalMassEl.innerText = total;
+            totalMassEl.innerText = Math.round(total);
         }
     }
 
@@ -520,13 +499,14 @@ export class Kneeboard {
             if (fuelSlider) fuelSlider.disabled = !allowed;
             if (waterSlider) waterSlider.disabled = !allowed;
 
-            if (allowed && fuelSlider && document.activeElement !== fuelSlider && player.fuelKg !== undefined) {
+            // Only update slider values from game state if user is NOT actively dragging them
+            if (allowed && fuelSlider && !this.isFuelDragging && player.fuelKg !== undefined) {
                 fuelSlider.value = player.fuelKg;
                 const fuelVal = document.getElementById('kb-fuel-val');
                 if (fuelVal) fuelVal.innerText = Math.round(player.fuelKg);
             }
 
-            if (allowed && waterSlider && document.activeElement !== waterSlider && player.waterTankKg !== undefined) {
+            if (allowed && waterSlider && !this.isWaterDragging && player.waterTankKg !== undefined) {
                 waterSlider.value = player.waterTankKg;
                 const waterVal = document.getElementById('kb-water-val');
                 if (waterVal) waterVal.innerText = Math.round(player.waterTankKg);

@@ -6,6 +6,8 @@ export class InputManager {
         this.landingLightOn = false;
 
         window.addEventListener('keydown', (e) => {
+            if (e.target.closest && e.target.closest('#pilot-kneeboard')) return;
+
             if ([
                 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'ControlLeft', 'ControlRight', 'ShiftLeft', 'ShiftRight', 
                 'KeyQ', 'KeyF', 'KeyE', 'KeyG', 'KeyL', 'Space',
@@ -37,6 +39,8 @@ export class InputManager {
         });
 
         window.addEventListener('wheel', (e) => {
+            if (e.target.closest && e.target.closest('#pilot-kneeboard')) return;
+
             this.cameraDistance += e.deltaY * 0.05;
             this.cameraDistance = Math.max(10, Math.min(60, this.cameraDistance));
         });
