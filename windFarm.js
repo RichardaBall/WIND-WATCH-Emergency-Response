@@ -353,10 +353,10 @@ export class WindFarm {
                 const isWaterFull = (player.waterTankKg !== undefined) ? (player.waterTankKg >= maxWater - 1.0) : true;
 
                 if (isLandedOnBase && isFuelFull && isWaterFull) {
-                    // Accelerate cooldown timer to spawn within 3 to 6 seconds after refueling/reloading
-                    if (this.cooldownTimer > 6.0) {
-                        this.cooldownTimer = 3.0 + Math.random() * 3.0;
-                        console.log(`[WTG FIRE] Player landed and topped off on helipad. Quick-spawning next fire in ${this.cooldownTimer.toFixed(1)}s.`);
+                    // Accelerate cooldown timer to spawn within 5 seconds after refueling/reloading when no WTG is on fire
+                    if (this.cooldownTimer > 5.0) {
+                        this.cooldownTimer = 2.0 + Math.random() * 3.0; // ~3 to 5 seconds
+                        console.log(`[WTG FIRE] Player landed and ready with full fuel/water. Reducing fire spawn timer to ${this.cooldownTimer.toFixed(1)}s.`);
                     }
                 }
             }
