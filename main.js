@@ -48,6 +48,7 @@ let searchLightSystem = null;
 let buoySystem = null;
 let shark = null;
 let sharkCatchSystem = null;
+let loadingMusic = null;
 
 const clock = new THREE.Clock();
 
@@ -81,8 +82,39 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// Wire up click event listeners for system status buttons
+// Wire up click event listeners for system status buttons and Load Game start button
 window.addEventListener('DOMContentLoaded', () => {
+    const loadGameBtn = document.getElementById('load-game-btn');
+    const startScreen = document.getElementById('start-screen');
+    const loadingScreen = document.getElementById('loading-screen');
+
+    if (loadGameBtn) {
+        loadGameBtn.addEventListener('click', async () => {
+            // 1. Initialize and play loading music on loop from root directory
+            loadingMusic = new Audio('loadingmusic.mp3');
+            loadingMusic.loop = true;
+            try {
+                await loadingMusic.play();
+            } catch (err) {
+                console.warn("Loading music playback prevented or failed:", err);
+            }
+
+            // 2. Hide start screen and show progress loading screen
+            if (startScreen) {
+                startScreen.style.opacity = '0';
+                setTimeout(() => {
+                    startScreen.style.display = 'none';
+                }, 600);
+            }
+            if (loadingScreen) {
+                loadingScreen.style.display = 'flex';
+            }
+
+            // 3. Kick off asset loading pipeline
+            initializeGameAssets();
+        });
+    }
+
     const btnBattery = document.getElementById('status-battery');
     if (btnBattery) {
         btnBattery.addEventListener('click', () => {
@@ -197,7 +229,6 @@ const loadingManager = new THREE.LoadingManager(
         if (progressBar) progressBar.style.width = '100%';
         if (loadingStatus) loadingStatus.textContent = 'Preparing scene & compiling shaders...';
 
-        // Yield thread to allow browser to render 100% progress state
         await new Promise((resolve) => setTimeout(resolve, 20));
 
         if (loadedGltfHeli && loadedSpawnPosition) {
@@ -206,12 +237,10 @@ const loadingManager = new THREE.LoadingManager(
             console.warn("Loading complete, but helicopter or spawn position missing.");
         }
 
-        // Trigger rescue mission warmup to pre-compile raft and survivor assets
         if (rescueMission && typeof rescueMission.warmup === 'function') {
             rescueMission.warmup(renderer, camera);
         }
 
-        // Collect all subsystem model references to ensure zero missing assets during compile
         const extraModels = [
             shark ? shark.mesh : null,
             sharkCatchSystem ? sharkCatchSystem.caughtSharkMesh : null,
@@ -222,16 +251,30 @@ const loadingManager = new THREE.LoadingManager(
             rescueMission && rescueMission.survivor ? rescueMission.survivor.wavingMesh : null,
         ];
 
-        // Yield thread before launching GPU compilation pass
         await new Promise((resolve) => setTimeout(resolve, 20));
 
-        // Execute pre-compilation warm-up asynchronously to upload all shaders & textures before starting flight
         await AssetWarmupSystem.warmup(renderer, scene, camera, extraModels);
 
-        // Force direct initial render of the prepared scene while loading screen overlay is still opaque
         renderer.render(scene, camera);
 
-        // Double rAF ensures GPU buffer swap clears before fading out loading overlay
+        // Smoothly fade out loading music
+        if (loadingMusic) {
+            const fadeDuration = 1000;
+            const fadeSteps = 20;
+            const stepTime = fadeDuration / fadeSteps;
+            const volumeStep = loadingMusic.volume / fadeSteps;
+            const fadeInterval = setInterval(() => {
+                if (loadingMusic.volume > volumeStep) {
+                    loadingMusic.volume -= volumeStep;
+                } else {
+                    loadingMusic.volume = 0;
+                    loadingMusic.pause();
+                    loadingMusic.currentTime = 0;
+                    clearInterval(fadeInterval);
+                }
+            }, stepTime);
+        }
+
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 const loadingScreen = document.getElementById('loading-screen');
@@ -256,40 +299,36 @@ const loadingManager = new THREE.LoadingManager(
     }
 );
 
-// Configure DRACOLoader instance with the exact valid Google CDN decoder path
+// Configure DRACOLoader instance with valid Google CDN decoder path
 const dracoLoader = new DRACOLoader(loadingManager);
 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
 
 const loader = new GLTFLoader(loadingManager);
 loader.setDRACOLoader(dracoLoader);
 
-// Preload helicopter model via loadingManager
-loader.load('helicopter.glb', (gltfHeli) => {
-    loadedGltfHeli = gltfHeli;
-}, undefined, (error) => {
-    console.error("Helicopter model failed to load:", error);
-});
+function initializeGameAssets() {
+    liferaftManager = new LiferaftManager(scene, loadingManager);
+    rescueMission = new RescueMission(scene, loadingManager);
+    windFarm = new WindFarm(scene, loadingManager);
+    buoySystem = new BuoySystem(scene, loadingManager);
 
-// Initialize LiferaftManager, RescueMission, WindFarm, BuoySystem, MainBase, Shark, and SharkCatchSystem
-liferaftManager = new LiferaftManager(scene, loadingManager);
-rescueMission = new RescueMission(scene, loadingManager);
-windFarm = new WindFarm(scene, loadingManager);
-buoySystem = new BuoySystem(scene, loadingManager);
+    shark = new Shark(scene, loadingManager);
+    sharkCatchSystem = new SharkCatchSystem(scene, loadingManager);
 
-// Instantiate shark using built-in class defaults
-shark = new Shark(scene, loadingManager);
+    mainBase = new MainBase(scene, loadingManager, (spawnPosition) => {
+        loadedSpawnPosition = spawnPosition;
+        lightingSystem = new LightingSystem(scene, mainBase.helipadCenter);
+        if (buoySystem) {
+            buoySystem.setHelipadPosition(mainBase.helipadCenter);
+        }
+    });
 
-// Instantiate shark catching system
-sharkCatchSystem = new SharkCatchSystem(scene, loadingManager);
-
-mainBase = new MainBase(scene, loadingManager, (spawnPosition) => {
-    loadedSpawnPosition = spawnPosition;
-    // Initialize standalone lighting system anchored to helipad center
-    lightingSystem = new LightingSystem(scene, mainBase.helipadCenter);
-    if (buoySystem) {
-        buoySystem.setHelipadPosition(mainBase.helipadCenter);
-    }
-});
+    loader.load('helicopter.glb', (gltfHeli) => {
+        loadedGltfHeli = gltfHeli;
+    }, undefined, (error) => {
+        console.error("Helicopter model failed to load:", error);
+    });
+}
 
 function initGameAfterLoad(gltfHeli, spawnPosition) {
     const model = gltfHeli.scene;
@@ -354,13 +393,10 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
     const mixer = new THREE.AnimationMixer(model);
     helicopterPlayer = new HelicopterPlayer(model, gltfHeli.animations, mixer, soundManager);
 
-    // Link rescueMission reference to player for winch system lookup
     helicopterPlayer.rescueMission = rescueMission;
 
-    // Initialize standalone SearchLightSystem module
     searchLightSystem = new SearchLightSystem(model, scene);
 
-    // Pass buoySystem directly into NavRadio so 210 kHz points to the Approach Buoy
     navRadio = new NavRadio(helicopterPlayer, spawnPosition, soundManager, buoySystem);
 
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
@@ -434,7 +470,7 @@ function animate() {
     requestAnimationFrame(animate);
 
     if (developerTool && developerTool.isPaused) {
-        clock.getDelta(); // Clear elapsed time accumulator to prevent time jumps on unpause
+        clock.getDelta();
         if (developerTool.isFreeCamActive && developerTool.orbitControls) {
             developerTool.orbitControls.update();
         }
@@ -498,7 +534,6 @@ function animate() {
         rescueMission.update(delta, helicopterPlayer, mainBase);
     }
 
-    // Update standalone search light system with windFarm, liferaftManager, and rescueMission references
     if (searchLightSystem && helicopterPlayer) {
         searchLightSystem.update(delta, helicopterPlayer, weatherData, mainBase, windFarm, liferaftManager, rescueMission);
     }

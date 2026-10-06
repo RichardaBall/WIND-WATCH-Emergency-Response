@@ -77,8 +77,8 @@
             color: #00ff00;
             opacity: 1.0;
         }
-        /* Loading Screen Overlay with Background Image */
-        #loading-screen {
+        /* Initial Start Screen Overlay */
+        #start-screen {
             position: fixed;
             top: 0;
             left: 0;
@@ -95,7 +95,60 @@
             color: #ffffff;
             font-family: monospace;
         }
-        /* Optional dark overlay to make text/progress bar stand out against the background */
+        #start-screen::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1;
+        }
+        #start-screen > * {
+            position: relative;
+            z-index: 2;
+        }
+        #load-game-btn {
+            margin-top: 35px;
+            padding: 18px 44px;
+            font-size: 24px;
+            font-weight: bold;
+            font-family: monospace;
+            background: transparent;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            border-radius: 6px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7);
+            transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+        }
+        #load-game-btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: scale(1.05);
+            box-shadow: 0 6px 25px rgba(255, 255, 255, 0.3);
+        }
+
+        /* Loading Screen Overlay (Hidden initially) */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: url('loading-bg.jpg') no-repeat center center fixed;
+            background-size: cover;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 99999;
+            transition: opacity 0.6s ease-out;
+            color: #ffffff;
+            font-family: monospace;
+        }
         #loading-screen::before {
             content: '';
             position: absolute;
@@ -106,7 +159,6 @@
             background: rgba(0, 0, 0, 0.4);
             z-index: 1;
         }
-        /* Ensure loading elements sit above the dark overlay */
         #loading-screen > * {
             position: relative;
             z-index: 2;
@@ -164,6 +216,13 @@
     </script>
 </head>
 <body>
+    <!-- Start Screen Overlay -->
+    <div id="start-screen">
+        <div class="loading-title">Wind Watch</div>
+        <div class="loading-subtitle">Emergency Response</div>
+        <button id="load-game-btn">START</button>
+    </div>
+
     <!-- Loading Screen Overlay -->
     <div id="loading-screen">
         <div class="loading-title">Wind Watch</div>
@@ -207,7 +266,7 @@
                 <path d="M17 12h2a2 2 0 0 1 2 2v5"></path>
             </svg>
         </button>
-        <!-- Engine [E] (Dashboard Check Engine Icon) -->
+        <!-- Engine [E] -->
         <button id="status-engine" class="system-status-btn" title="Engine [E]">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 3v3h6V3"></path>
@@ -215,7 +274,7 @@
                 <path d="M6 18v3M18 18v3M2 12h2M20 12h2"></path>
             </svg>
         </button>
-        <!-- Landing Gear [G] (Three Solid Dots) -->
+        <!-- Landing Gear [G] -->
         <button id="status-gear" class="system-status-btn" title="Landing Gear [G]">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="6" r="2.5" fill="currentColor"></circle>
@@ -252,6 +311,18 @@
                 }
             }
         });
+
+        // Automatically request fullscreen when START is clicked
+        const loadGameBtn = document.getElementById('load-game-btn');
+        if (loadGameBtn) {
+            loadGameBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.warn(`Error attempting to enable fullscreen on start: ${err.message}`);
+                    });
+                }
+            });
+        }
     </script>
 
     <script type="module" src="./main.js"></script>
