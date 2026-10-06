@@ -6,6 +6,10 @@ export class HelicopterAudio {
         this.noiseNode = null;
         this.filterNode = null;
         
+        // Rotor Sound AudioBuffer & Source
+        this.rotorBuffer = null;
+        this.rotorSourceNode = null;
+
         // Turbine Whine Nodes
         this.turbineOsc = null;
         this.turbineGain = null;
@@ -22,27 +26,59 @@ export class HelicopterAudio {
         this.lowFuelBuffer = null;
     }
 
-    startHelicopterEngine() {
+    async startHelicopterEngine() {
         try {
             this.ctxMgr.ensureContextRunning();
             if (this.isPlaying || !this.ctxMgr.audioCtx || this.ctxMgr.isMuted) return;
 
             const now = this.ctxMgr.audioCtx.currentTime;
 
-            const bufferSize = this.ctxMgr.audioCtx.sampleRate * 2;
-            const buffer = this.ctxMgr.audioCtx.createBuffer(1, bufferSize, this.ctxMgr.audioCtx.sampleRate);
-            const output = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                output[i] = Math.random() * 2 - 1;
+            // Load rotorsound.mp3 buffer if not already cached
+            if (!this.rotorBuffer) {
+                try {
+                    const response = await fetch('rotorsound.mp3');
+                    if (response.ok) {
+                        const arrayBuffer = await response.arrayBuffer();
+                        this.rotorBuffer = await this.ctxMgr.audioCtx.decodeAudioData(arrayBuffer);
+                    }
+                } catch (err) {
+                    console.warn("Failed to load rotorsound.mp3, falling back to procedural noise:", err);
+                }
             }
 
-            this.noiseNode = this.ctxMgr.audioCtx.createBufferSource();
-            this.noiseNode.buffer = buffer;
-            this.noiseNode.loop = true;
+            this.engineGain = this.ctxMgr.audioCtx.createGain();
+            this.engineGain.gain.setValueAtTime(0.001, now);
+            this.engineGain.gain.exponentialRampToValueAtTime(0.45, now + 3.5);
 
-            this.filterNode = this.ctxMgr.audioCtx.createBiquadFilter();
-            this.filterNode.type = 'lowpass';
-            this.filterNode.frequency.setValueAtTime(80, now);
+            if (this.rotorBuffer) {
+                this.rotorSourceNode = this.ctxMgr.audioCtx.createBufferSource();
+                this.rotorSourceNode.buffer = this.rotorBuffer;
+                this.rotorSourceNode.loop = true;
+                this.rotorSourceNode.playbackRate.setValueAtTime(0.1, now);
+                this.rotorSourceNode.playbackRate.exponentialRampToValueAtTime(1.0, now + 3.5);
+
+                this.rotorSourceNode.connect(this.engineGain);
+                this.rotorSourceNode.start(now);
+            } else {
+                const bufferSize = this.ctxMgr.audioCtx.sampleRate * 2;
+                const buffer = this.ctxMgr.audioCtx.createBuffer(1, bufferSize, this.ctxMgr.audioCtx.sampleRate);
+                const output = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+
+                this.noiseNode = this.ctxMgr.audioCtx.createBufferSource();
+                this.noiseNode.buffer = buffer;
+                this.noiseNode.loop = true;
+
+                this.filterNode = this.ctxMgr.audioCtx.createBiquadFilter();
+                this.filterNode.type = 'lowpass';
+                this.filterNode.frequency.setValueAtTime(80, now);
+
+                this.noiseNode.connect(this.filterNode);
+                this.filterNode.connect(this.engineGain);
+                this.noiseNode.start(now);
+            }
 
             this.turbineOsc = this.ctxMgr.audioCtx.createOscillator();
             this.turbineOsc.type = 'sine';
@@ -52,6 +88,7 @@ export class HelicopterAudio {
             this.turbineGain.gain.setValueAtTime(0.00625, now);
 
             this.turbineOsc.connect(this.turbineGain);
+            this.turbineGain.connect(this.engineGain);
 
             this.rotorLfo = this.ctxMgr.audioCtx.createOscillator();
             this.rotorLfo.type = 'triangle';
@@ -66,18 +103,9 @@ export class HelicopterAudio {
             this.rotorModGain.gain.setValueAtTime(1.0, now);
             this.rotorLfoGain.connect(this.rotorModGain.gain);
 
-            this.engineGain = this.ctxMgr.audioCtx.createGain();
-            this.engineGain.gain.setValueAtTime(0.001, now);
-            this.engineGain.gain.exponentialRampToValueAtTime(0.45, now + 3.5);
-
-            this.noiseNode.connect(this.filterNode);
-            this.filterNode.connect(this.engineGain);
-            this.turbineGain.connect(this.engineGain);
-            
             this.engineGain.connect(this.rotorModGain);
             this.rotorModGain.connect(this.ctxMgr.masterGain);
 
-            this.noiseNode.start(now);
             this.turbineOsc.start(now);
             this.rotorLfo.start(now);
 
@@ -98,17 +126,33 @@ export class HelicopterAudio {
             }
 
             setTimeout(() => {
+                if (this.rotorSourceNode) {
+                    try {
+                        this.rotorSourceNode.stop();
+                        this.rotorSourceNode.disconnect();
+                    } catch (err) {}
+                    this.rotorSourceNode = null;
+                }
                 if (this.noiseNode) {
-                    this.noiseNode.stop();
-                    this.noiseNode.disconnect();
+                    try {
+                        this.noiseNode.stop();
+                        this.noiseNode.disconnect();
+                    } catch (err) {}
+                    this.noiseNode = null;
                 }
                 if (this.turbineOsc) {
-                    this.turbineOsc.stop();
-                    this.turbineOsc.disconnect();
+                    try {
+                        this.turbineOsc.stop();
+                        this.turbineOsc.disconnect();
+                    } catch (err) {}
+                    this.turbineOsc = null;
                 }
                 if (this.rotorLfo) {
-                    this.rotorLfo.stop();
-                    this.rotorLfo.disconnect();
+                    try {
+                        this.rotorLfo.stop();
+                        this.rotorLfo.disconnect();
+                    } catch (err) {}
+                    this.rotorLfo = null;
                 }
                 this.isPlaying = false;
             }, 3000);
@@ -125,12 +169,22 @@ export class HelicopterAudio {
             const speedFactor = Math.abs(moveSpeed) / 75.0;
 
             const targetTurbineFreq = Math.max(300, Math.min(2400, 400 + (enginePower * 1400) + (speedFactor * 400)));
-            const targetFilterFreq = Math.max(80, Math.min(500, 80 + (enginePower * 320) + (speedFactor * 150)));
+            const targetRotorPlaybackRate = Math.max(0.2, Math.min(1.3, 0.2 + (enginePower * 0.9) + (speedFactor * 0.2)));
             const targetRotorFreq = Math.max(3.0, Math.min(6.2, 3.5 + (enginePower * 2.0) + (speedFactor * 0.8)));
 
-            this.turbineOsc.frequency.setTargetAtTime(targetTurbineFreq, now, 0.1);
-            this.filterNode.frequency.setTargetAtTime(targetFilterFreq, now, 0.1);
-            this.rotorLfo.frequency.setTargetAtTime(targetRotorFreq, now, 0.1);
+            if (this.turbineOsc) {
+                this.turbineOsc.frequency.setTargetAtTime(targetTurbineFreq, now, 0.1);
+            }
+            if (this.rotorSourceNode && this.rotorSourceNode.playbackRate) {
+                this.rotorSourceNode.playbackRate.setTargetAtTime(targetRotorPlaybackRate, now, 0.1);
+            }
+            if (this.filterNode) {
+                const targetFilterFreq = Math.max(80, Math.min(500, 80 + (enginePower * 320) + (speedFactor * 150)));
+                this.filterNode.frequency.setTargetAtTime(targetFilterFreq, now, 0.1);
+            }
+            if (this.rotorLfo) {
+                this.rotorLfo.frequency.setTargetAtTime(targetRotorFreq, now, 0.1);
+            }
         } catch (e) {
             // Suppress continuous update logspam
         }
