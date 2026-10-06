@@ -24,15 +24,27 @@ export class SharkCatchSystem {
         // Proximity threshold in meters (horizontal & vertical margin) to trigger bite/attachment
         this.catchDistanceThreshold = 12.0;
 
-        // Rotated 180 degrees so head/mouth attaches to hook instead of tail
-        this.pitchAngle = -Math.PI / 2; 
-        this.mouthOffset = new THREE.Vector3(0, -1.2, 0); // Local offset to place hook inside jaws
+        // --- POSITION & ORIENTATION OFFSETS ---
+        this.mouthOffset = new THREE.Vector3(-0.23, -5.54, -0.63);
+        this.pitchAngle = THREE.MathUtils.degToRad(-90.0);
+        this.yawAngle = THREE.MathUtils.degToRad(0.0);
+        this.rollAngle = THREE.MathUtils.degToRad(0.0);
 
         this.initModel();
     }
 
     setWaterSystem(waterSystem) {
         this.waterSystem = waterSystem;
+    }
+
+    /**
+     * Programmatically update mouth offsets and orientation angles.
+     */
+    setOffsets(x = -0.23, y = -5.54, z = -0.63, pitchDeg = -90, yawDeg = 0, rollDeg = 0) {
+        this.mouthOffset.set(x, y, z);
+        this.pitchAngle = THREE.MathUtils.degToRad(pitchDeg);
+        this.yawAngle = THREE.MathUtils.degToRad(yawDeg);
+        this.rollAngle = THREE.MathUtils.degToRad(rollDeg);
     }
 
     initModel() {
@@ -102,7 +114,6 @@ export class SharkCatchSystem {
                         shark.mesh.visible = true;
                     }
                 }
-                console.log("SharkCatchSystem: Shark dropped back into water with splash! Restored shark visibility along its normal route.");
             }
             return;
         }
@@ -126,28 +137,33 @@ export class SharkCatchSystem {
             const verticalDist = Math.abs(hookPos.y - sharkPos.y);
 
             if (horizontalDist <= this.catchDistanceThreshold && verticalDist <= 10.0) {
-                console.log("SharkCatchSystem: Shark caught!");
                 this.catchShark(shark);
             }
         }
 
         // 2. POSITION ATTACHED SHARK TO HOOK AND ORIENT VERTICALLY FROM MOUTH
         if (this.isCaught && this.sharkCatchMesh) {
-            const shiftedPos = hookPos.clone().add(this.mouthOffset);
+            // Transform local mouth offset to world space using player's Y heading rotation
+            const worldOffset = this.mouthOffset.clone();
+            if (player && player.model) {
+                worldOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.model.rotation.y);
+            }
+
+            const shiftedPos = hookPos.clone().add(worldOffset);
             this.sharkCatchMesh.position.copy(shiftedPos);
 
-            if (player.model) {
-                this.sharkCatchMesh.rotation.set(
-                    this.pitchAngle,               // -90 deg pitch (head pointing up)
-                    player.model.rotation.y,       // Align heading with heli
-                    0,
+            if (player && player.model) {
+                const euler = new THREE.Euler(
+                    this.pitchAngle,
+                    player.model.rotation.y + this.yawAngle,
+                    this.rollAngle,
                     'YXZ'
                 );
+                this.sharkCatchMesh.rotation.copy(euler);
             }
 
             // Trigger drop when winch cable is retracted past halfway mark or fully UP
             if (currentCableLength <= halfwayCableLength || winch.winchState === 'UP') {
-                console.log("SharkCatchSystem: Retracted past halfway, dropping shark back into water!");
                 this.detachAndDrop();
             }
         }
