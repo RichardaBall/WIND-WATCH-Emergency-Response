@@ -90,9 +90,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (loadGameBtn) {
         loadGameBtn.addEventListener('click', async () => {
-            // 1. Initialize and play loading music on loop from root directory
+            // 1. Initialize and play loading music on loop from root directory at half volume
             loadingMusic = new Audio('loadingmusic.mp3');
             loadingMusic.loop = true;
+            loadingMusic.volume = 0.1;
             try {
                 await loadingMusic.play();
             } catch (err) {
