@@ -19,6 +19,7 @@ export class HelicopterAudio {
         this.rotorModGain = null;
 
         this.isPlaying = false;
+        this.lowFuelBuffer = null;
     }
 
     startHelicopterEngine() {
@@ -132,6 +133,39 @@ export class HelicopterAudio {
             this.rotorLfo.frequency.setTargetAtTime(targetRotorFreq, now, 0.1);
         } catch (e) {
             // Suppress continuous update logspam
+        }
+    }
+
+    async playLowFuelSound() {
+        if (!this.ctxMgr || !this.ctxMgr.audioCtx || this.ctxMgr.isMuted) return;
+        try {
+            this.ctxMgr.ensureContextRunning();
+            if (!this.lowFuelBuffer) {
+                const response = await fetch('lowfuel.mp3');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const arrayBuffer = await response.arrayBuffer();
+                this.lowFuelBuffer = await this.ctxMgr.audioCtx.decodeAudioData(arrayBuffer);
+            }
+
+            const source = this.ctxMgr.audioCtx.createBufferSource();
+            source.buffer = this.lowFuelBuffer;
+
+            const gainNode = this.ctxMgr.audioCtx.createGain();
+            gainNode.gain.setValueAtTime(0.8, this.ctxMgr.audioCtx.currentTime);
+
+            source.connect(gainNode);
+            gainNode.connect(this.ctxMgr.masterGain);
+
+            source.start(0);
+        } catch (e) {
+            console.warn("Web Audio API lowfuel.mp3 failed, falling back to HTML5 Audio:", e);
+            try {
+                const audio = new Audio('lowfuel.mp3');
+                audio.volume = 0.8;
+                audio.play().catch(err => console.warn("HTML5 Audio fallback error:", err));
+            } catch (err2) {
+                console.warn("HTML5 Audio fallback failed:", err2);
+            }
         }
     }
 }

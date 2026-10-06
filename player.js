@@ -16,6 +16,8 @@ export class HelicopterPlayer {
         this.isPermanentlyDamaged = false; // Gear-up landing damage state
         this.collisionEnabled = true; // Collision detection toggle state
 
+        this.hasPlayedLowFuelSound = false; // Track single-play low fuel alert
+
         // Find and cache the top strobe light and its bulb mesh once
         this.strobeLight = null;
         this.strobeOriginalColor = new THREE.Color(0xffffff);
@@ -164,6 +166,7 @@ export class HelicopterPlayer {
         this.hasCrashedOnHelipad = false;
         this.hasCrashedIntoStructure = false;
         this.isPermanentlyDamaged = false;
+        this.hasPlayedLowFuelSound = false;
 
         this.fuelKg = this.maxFuelKg;
         this.waterTankKg = this.maxWaterTankKg;
@@ -459,6 +462,17 @@ export class HelicopterPlayer {
                 this.targetEnginePower = 0.0;
                 this.isEngineRunning = false;
                 if (this.soundManager) this.soundManager.stopHelicopterEngine();
+            }
+        }
+
+        // --- Low Fuel Sound Trigger (100kg threshold, engine on, single play) ---
+        if (this.fuelKg > 100.0) {
+            this.hasPlayedLowFuelSound = false;
+        }
+        if (this.fuelKg <= 100.0 && !this.hasPlayedLowFuelSound && (this.isEngineRunning || this.enginePower > 0.01 || this.targetEnginePower > 0)) {
+            this.hasPlayedLowFuelSound = true;
+            if (this.soundManager && typeof this.soundManager.playLowFuelSound === 'function') {
+                this.soundManager.playLowFuelSound();
             }
         }
 

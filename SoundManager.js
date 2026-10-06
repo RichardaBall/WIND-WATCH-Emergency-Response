@@ -95,6 +95,10 @@ export class SoundManager {
         this.helicopter.updateHelicopterAudio(enginePower, moveSpeed);
     }
 
+    playLowFuelSound() {
+        this.helicopter.playLowFuelSound();
+    }
+
     // Weather Audio Delegations
     startRainSound() {
         this.weather.startRainSound();
