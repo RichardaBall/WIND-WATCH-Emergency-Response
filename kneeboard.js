@@ -73,7 +73,7 @@ export class Kneeboard {
             letter-spacing: 1px;
             color: #1a1a1a;
         `;
-        header.innerText = 'PILOT KNEEBOARD // AW189';
+        header.innerText = 'PILOT KNEEBOARD';
         this.container.appendChild(header);
 
         // Pages container
@@ -90,43 +90,49 @@ export class Kneeboard {
         this.page1El.innerHTML = `
             <div style="font-weight: bold; text-align: center; text-decoration: underline; font-size: 12px; margin-bottom: 8px; color: #3a3525; letter-spacing: 0.5px;">CONTROLS</div>
 
-            <div style="margin-bottom: 7px; font-size: 11px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">1. SYSTEMS</div>
+            <div style="margin-bottom: 6px; font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">1. SYSTEMS</div>
                 <div style="display: flex; justify-content: space-between;"><span>Battery Switch:</span><strong>[Q]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Fuel Pump Prime:</span><strong>[F]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Engine Ignition:</span><strong>[E]</strong></div>
+                <div style="display: flex; justify-content: space-between;"><span>Navigation Radio:</span><strong>[N]</strong></div>
             </div>
 
-            <div style="margin-bottom: 7px; font-size: 11px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">2. FLIGHT CONTROLS</div>
+            <div style="margin-bottom: 6px; font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">2. FLIGHT CONTROLS</div>
                 <div style="display: flex; justify-content: space-between;"><span>Pitch / Roll / Yaw:</span><strong>Arrow Keys</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Collective Up/Dn:</span><strong>Shift/Ctrl</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Camera Zoom:</span><strong>Mouse Wheel</strong></div>
             </div>
 
-            <div style="margin-bottom: 7px; font-size: 11px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">3. LIGHTING & GEAR</div>
+            <div style="margin-bottom: 6px; font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">3. LIGHTING & GEAR</div>
                 <div style="display: flex; justify-content: space-between;"><span>Landing Gear:</span><strong>[G]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Landing Light:</span><strong>[L]</strong></div>
             </div>
 
-            <div style="margin-bottom: 7px; font-size: 11px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">4. FIREFIGHTING & UI</div>
+            <div style="margin-bottom: 6px; font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">4. FIREFIGHTING & UI</div>
                 <div style="display: flex; justify-content: space-between;"><span>Water Spray:</span><strong>Hold [Space]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>Toggle Kneeboard:</span><strong>[K]</strong></div>
             </div>
 
-            <div style="font-size: 11px; border-top: 1px dashed #6b634b; padding-top: 5px; margin-top: 5px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 4px;">IN-FLIGHT NOTES:</div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                    <div><strong>Fuel QTY</strong><br><span style="font-size: 10px; color: #4a4532;">(Tail Strobe)</span></div>
+            <div style="margin-bottom: 6px; font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">5. LIFTING OPERATIONS</div>
+                <div style="display: flex; justify-content: space-between;"><span>Winch Up/Down:</span><strong>[X]</strong></div>
+            </div>
+
+            <div style="font-size: 10.5px; border-top: 1px dashed #6b634b; padding-top: 4px; margin-top: 4px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">IN-FLIGHT NOTES:</div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                    <div><strong>Fuel QTY</strong><br><span style="font-size: 9.5px; color: #4a4532;">(Tail Strobe)</span></div>
                     <div style="text-align: left;">
                         <div style="text-align: left;">White (50-100%)</div>
                         <div style="text-align: left;">Amber (10-50%)</div>
                         <div style="text-align: left;">Red (&lt;10%)</div>
                     </div>
                 </div>
-                <div style="margin-top: 6px;">• ADF: Yellow arrow on rotor hub indicates relative NDB station bearing.</div>
+                <div style="margin-top: 4px;">• ADF: Yellow arrow on rotor hub indicates relative NDB station bearing.</div>
             </div>
         `;
 
@@ -163,11 +169,18 @@ export class Kneeboard {
                 <div style="display: flex; justify-content: space-between;"><span>• Landing Light:</span><strong>AS REQ [L]</strong></div>
             </div>
 
-            <div style="font-size: 11px;">
+            <div style="margin-bottom: 7px; font-size: 11px;">
                 <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">5. SHUTDOWN</div>
                 <div style="display: flex; justify-content: space-between;"><span>• Fuel Pump:</span><strong>OFF [F]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>• Engine Cutoff:</span><strong>OFF [E]</strong></div>
                 <div style="display: flex; justify-content: space-between;"><span>• Battery Switch:</span><strong>OFF [Q]</strong></div>
+            </div>
+
+            <div style="font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">6. LIFTING EQUIPMENT</div>
+                <div style="display: flex; justify-content: space-between;"><span>• Gear Up:</span><strong>[G]</strong></div>
+                <div style="display: flex; justify-content: space-between;"><span>• Winch Up:</span><strong>[X]</strong></div>
+                <div style="display: flex; justify-content: space-between;"><span>• Winch Down:</span><strong>[X]</strong></div>
             </div>
         `;
 
