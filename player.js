@@ -155,6 +155,43 @@ export class HelicopterPlayer {
         this.wasOnGround = true;
     }
 
+    respawn(position) {
+        if (!this.model) return;
+        this.model.position.copy(position);
+        this.model.rotation.set(0, 0, 0);
+
+        this.hasCrashedInSea = false;
+        this.hasCrashedOnHelipad = false;
+        this.hasCrashedIntoStructure = false;
+        this.isPermanentlyDamaged = false;
+
+        this.fuelKg = this.maxFuelKg;
+        this.waterTankKg = this.maxWaterTankKg;
+        this.isElectricalOn = false;
+        this.isFuelPumpOn = false;
+        this.isEngineRunning = false;
+        this.enginePower = 0.0;
+        this.targetEnginePower = 0.0;
+        this.isGearUp = false;
+
+        this.currentMoveSpeed = 0.0;
+        this.currentStrafeSpeed = 0.0;
+        this.currentTurnSpeed = 0.0;
+        this.currentAltitudeSpeed = 0.0;
+        this.wasOnGround = true;
+
+        if (this.mixer) {
+            this.mixer.timeScale = 1.0;
+        }
+
+        for (let name in this.actions) {
+            const action = this.actions[name];
+            if (action.isRunning()) {
+                action.stop();
+            }
+        }
+    }
+
     getTotalMass() {
         return this.dryWeightKg + this.fuelKg + this.waterTankKg;
     }

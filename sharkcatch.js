@@ -30,6 +30,9 @@ export class SharkCatchSystem {
         this.yawAngle = THREE.MathUtils.degToRad(0.0);
         this.rollAngle = THREE.MathUtils.degToRad(0.0);
 
+        // Active visual splash effects list
+        this.activeSplashes = [];
+
         this.initModel();
     }
 
@@ -74,6 +77,52 @@ export class SharkCatchSystem {
     }
 
     /**
+     * Creates a realistic 3D splash effect with multi-tier water spray droplets and mist particles (no ripple ring).
+     * @param {THREE.Vector3} pos 
+     */
+    createSplashEffect(pos) {
+        // Play audio splash if available via sound manager or UI audio
+        if (window.soundManager && typeof window.soundManager.playSplash === 'function') {
+            window.soundManager.playSplash();
+        } else if (window.UI_Audio && typeof window.UI_Audio.playSplash === 'function') {
+            window.UI_Audio.playSplash();
+        }
+
+        const splashGroup = new THREE.Group();
+        splashGroup.position.copy(pos);
+
+        // Upward spray droplets and mist particles
+        const dropletCount = 32;
+        const droplets = [];
+        const dropletGeo = new THREE.SphereGeometry(0.08, 6, 6);
+        const dropletMat = new THREE.MeshBasicMaterial({ color: 0xddf0ff, transparent: true, opacity: 0.9 });
+
+        for (let i = 0; i < dropletCount; i++) {
+            const droplet = new THREE.Mesh(dropletGeo, dropletMat);
+            
+            // Mix radial spray and central upward jets
+            const isCentral = i < 8;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = isCentral ? (2.0 + Math.random() * 3.0) : (5.0 + Math.random() * 7.0);
+            const vx = isCentral ? (Math.cos(angle) * speed * 0.2) : (Math.cos(angle) * speed * 0.6);
+            const vz = isCentral ? (Math.sin(angle) * speed * 0.2) : (Math.sin(angle) * speed * 0.6);
+            const vy = isCentral ? (8.0 + Math.random() * 6.0) : (4.0 + Math.random() * 6.0);
+
+            droplet.position.set(0, 0.1, 0);
+            splashGroup.add(droplet);
+            droplets.push({ mesh: droplet, velocity: new THREE.Vector3(vx, vy, vz) });
+        }
+
+        this.scene.add(splashGroup);
+        this.activeSplashes.push({
+            group: splashGroup,
+            droplets: droplets,
+            age: 0,
+            maxAge: 0.9
+        });
+    }
+
+    /**
      * Updates shark catching, hook attachment, dropping physics, and water splash logic.
      * @param {number} delta 
      * @param {Object} player 
@@ -82,6 +131,32 @@ export class SharkCatchSystem {
      */
     update(delta, player, shark, waterSystem = null) {
         const activeWaterSystem = waterSystem || this.waterSystem || (window.waterSystem || null);
+
+        // --- UPDATE ACTIVE VISUAL SPLASH EFFECTS ---
+        for (let i = this.activeSplashes.length - 1; i >= 0; i--) {
+            const splash = this.activeSplashes[i];
+            splash.age += delta;
+            const progress = splash.age / splash.maxAge;
+
+            if (progress >= 1.0) {
+                this.scene.remove(splash.group);
+                splash.droplets.forEach(d => {
+                    d.mesh.geometry.dispose();
+                });
+                this.activeSplashes.splice(i, 1);
+            } else {
+                // Update droplet ballistic trajectory, fade scale, and opacity
+                splash.droplets.forEach(d => {
+                    d.velocity.y -= 20.0 * delta; // Gravity
+                    d.mesh.position.addScaledVector(d.velocity, delta);
+                    const scaleFactor = Math.max(0.05, 1.0 - progress);
+                    d.mesh.scale.setScalar(scaleFactor);
+                    if (d.mesh.material) {
+                        d.mesh.material.opacity = 0.9 * (1.0 - progress);
+                    }
+                });
+            }
+        }
 
         // --- HANDLE FALLING ANIMATION ONCE RELEASED FROM HOOK ---
         if (this.isDropping && this.sharkCatchMesh) {
@@ -96,17 +171,20 @@ export class SharkCatchSystem {
                 const splashPos = this.sharkCatchMesh.position.clone();
                 splashPos.y = 0.0;
 
-                // 1. Trigger water splash particle effect
+                // 1. Trigger robust 3D particle splash effect & audio
+                this.createSplashEffect(splashPos);
+
+                // 2. Trigger water system splash if available
                 if (activeWaterSystem && typeof activeWaterSystem.addSplash === 'function') {
-                    activeWaterSystem.addSplash(splashPos, 2.5);
+                    activeWaterSystem.addSplash(splashPos, 3.0);
                 }
 
-                // 2. Hide caught shark model and reset drop state
+                // 3. Hide caught shark model and reset drop state
                 this.sharkCatchMesh.visible = false;
                 this.isDropping = false;
                 this.isCaught = false;
 
-                // 3. Re-enable original shark visibility along its ongoing path
+                // 4. Re-enable original shark visibility along its ongoing path
                 if (shark) {
                     if (typeof shark.setVisibility === 'function') {
                         shark.setVisibility(true);
