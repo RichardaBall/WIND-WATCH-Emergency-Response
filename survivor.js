@@ -44,19 +44,6 @@ function optimizeAndWarmUpGltf(gltfScene, renderer = null, mixer = null) {
     });
 
     if (activeRenderer) {
-        // Force GPU texture initialization and shader compilation
-        gltfScene.traverse((child) => {
-            if (child.isMesh && child.material) {
-                const mats = Array.isArray(child.material) ? child.material : [child.material];
-                mats.forEach(mat => {
-                    ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'emissiveMap', 'aoMap', 'alphaMap'].forEach(k => {
-                        if (mat[k]) {
-                            activeRenderer.initTexture(mat[k]);
-                        }
-                    });
-                });
-            }
-        });
         activeRenderer.compile(gltfScene, activeCamera);
     }
 
@@ -92,6 +79,7 @@ export class Survivor {
             wavingbye: null
         };
 
+        this.activeKey = null;
         this.mesh = null;
         this.mixer = null;
         this.currentAction = null;
@@ -111,17 +99,18 @@ export class Survivor {
         this.pendingAutoFade = true;
     }
 
-    async loadModels(files = {
-        raising: 'raising.glb',
-        wavingbye: 'wavingbye.glb'
-    }, renderer = null) {
-        const loader = this.loadingManager ? new GLTFLoader(this.loadingManager) : new GLTFLoader();
+    async loadModels(files = null, renderer = null) {
+        const manager = (this.loadingManager && typeof this.loadingManager.itemStart === 'function') 
+            ? this.loadingManager 
+            : THREE.DefaultLoadingManager;
 
-        const dracoLoader = new DRACOLoader(this.loadingManager);
+        const loader = new GLTFLoader(manager);
+
+        const dracoLoader = new DRACOLoader(manager);
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
 
-        const ktx2Loader = new KTX2Loader(this.loadingManager);
+        const ktx2Loader = new KTX2Loader(manager);
         ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
         const activeRenderer = renderer || this.renderer || window.renderer;
         if (activeRenderer) {
@@ -129,51 +118,61 @@ export class Survivor {
         }
         loader.setKTX2Loader(ktx2Loader);
 
-        const loadGLTF = (url) => {
+        const tryPathsForModel = (filename) => {
+            const candidates = [
+                filename,
+                `assets/character/${filename}`,
+                `assets/${filename}`,
+                `./assets/character/${filename}`,
+                `./assets/${filename}`,
+                `./${filename}`
+            ];
+
             return new Promise((resolve) => {
-                if (!url || typeof url !== 'string') {
-                    console.warn(`[Survivor] Skipped loading invalid or undefined GLTF URL:`, url);
-                    resolve(null);
-                    return;
-                }
-                loader.load(
-                    url,
-                    (gltf) => resolve(gltf),
-                    undefined,
-                    (error) => {
-                        console.warn(`[Survivor] Primary path '${url}' failed, attempting fallback path './${url}'...`, error);
-                        loader.load(
-                            `./${url}`,
-                            (gltf) => resolve(gltf),
-                            undefined,
-                            (err2) => {
-                                console.warn(`[Survivor] Could not load model at '${url}' or './${url}'.`, err2);
-                                resolve(null);
-                            }
-                        );
+                let attemptIndex = 0;
+
+                const attemptNext = () => {
+                    if (attemptIndex >= candidates.length) {
+                        console.error(`[Survivor] All candidate paths failed for model '${filename}'.`);
+                        resolve(null);
+                        return;
                     }
-                );
+
+                    const currentPath = candidates[attemptIndex];
+                    attemptIndex++;
+
+                    if (manager && typeof manager.itemStart === 'function') {
+                        manager.itemStart(currentPath);
+                    }
+
+                    loader.load(
+                        currentPath,
+                        (gltf) => {
+                            console.log(`[Survivor] Successfully loaded character model from: ${currentPath}`);
+                            if (manager && typeof manager.itemEnd === 'function') {
+                                manager.itemEnd(currentPath);
+                            }
+                            resolve(gltf);
+                        },
+                        undefined,
+                        (err) => {
+                            if (manager && typeof manager.itemEnd === 'function') {
+                                manager.itemEnd(currentPath);
+                            }
+                            attemptNext();
+                        }
+                    );
+                };
+
+                attemptNext();
             });
         };
 
         try {
-            console.log('[Survivor] Loading survivor character GLB models from main game folder...');
-            
-            const fileMap = {
-                raising: 'raising.glb',
-                wavingbye: 'wavingbye.glb',
-                ...(files || {})
-            };
-
             const [raisingGltf, wavingbyeGltf] = await Promise.all([
-                loadGLTF(fileMap.raising),
-                loadGLTF(fileMap.wavingbye)
+                tryPathsForModel('raising.glb'),
+                tryPathsForModel('wavingbye.glb')
             ]);
-
-            if (!raisingGltf && !wavingbyeGltf) {
-                console.error('[Survivor] All character GLB model paths failed to load.');
-                return false;
-            }
 
             const processGltf = (gltf, key) => {
                 if (!gltf) return null;
@@ -183,7 +182,6 @@ export class Survivor {
                 let action = null;
                 if (gltf.animations && gltf.animations.length > 0) {
                     action = mixer.clipAction(gltf.animations[0]);
-                    action.play();
                 }
 
                 optimizeAndWarmUpGltf(mesh, activeRenderer, mixer);
@@ -242,8 +240,6 @@ export class Survivor {
             if (!this.meshes['raising']) { this.meshes['raising'] = fallbackMesh; this.mixers['raising'] = fallbackMixer; this.actions['raising'] = fallbackAction; }
             if (!this.meshes['wavingbye']) { this.meshes['wavingbye'] = fallbackMesh; this.mixers['wavingbye'] = fallbackMixer; this.actions['wavingbye'] = fallbackAction; }
 
-            console.log('[Survivor] Character GLB models successfully loaded, scaled, and added to scene.');
-
             if (this.currentState === SurvivorState.DISEMBARKING || this.currentState === SurvivorState.WAVING) {
                 this.disembarkNextToHelicopter(this.pendingDisembarkPos, this.pendingHeliRotY, this.pendingDeckY, this.pendingAutoFade);
             } else if (this.currentState === SurvivorState.ON_RAFT && this.raftPosition) {
@@ -252,7 +248,7 @@ export class Survivor {
 
             return true;
         } catch (error) {
-            console.error('[Survivor] Error loading survivor character GLB models:', error);
+            console.error('[Survivor] Error loading survivor models:', error);
             return false;
         }
     }
@@ -279,19 +275,17 @@ export class Survivor {
     }
 
     setActiveModel(key, loop = true, playImmediately = true) {
+        this.activeKey = key;
+        
         Object.keys(this.meshes).forEach(k => {
             if (this.meshes[k]) {
-                this.meshes[k].visible = false;
+                this.meshes[k].visible = (k === key);
             }
         });
 
         this.mesh = this.meshes[key];
         this.mixer = this.mixers[key];
         const nextAction = this.actions[key];
-
-        if (this.mesh) {
-            this.mesh.visible = true;
-        }
 
         if (nextAction && this.mixer) {
             this.mixer.stopAllAction();
@@ -319,13 +313,12 @@ export class Survivor {
         this.fadeTimer = 0;
         this.setOpacity(1.0);
 
-        // Make raising model visible on the raft so GPU shaders and textures are fully active and pre-warmed,
-        // but pass playImmediately = false so the animation doesn't play and move the survivor off the raft.
-        this.setActiveModel('raising', false, false);
+        this.setActiveModel('raising', true, true);
         if (this.mesh) {
             this.mesh.visible = true;
             this.mesh.position.copy(this.raftPosition);
-            this.mesh.rotation.y = this.raftRotationY;
+            this.mesh.rotation.set(0, this.raftRotationY, 0);
+            this.mesh.updateMatrixWorld(true);
         }
     }
 
@@ -335,10 +328,10 @@ export class Survivor {
         this.fadeTimer = 0;
         this.setOpacity(1.0);
 
-        // Now start playing the raising animation since the winch has grabbed the survivor
-        this.setActiveModel('raising', false, true);
-        if (!this.mesh) return;
-        this.mesh.visible = true;
+        this.setActiveModel('raising', true, true);
+        if (this.mesh) {
+            this.mesh.visible = true;
+        }
     }
 
     enterCabin() {
@@ -391,6 +384,7 @@ export class Survivor {
         }
 
         this.mesh.visible = true;
+        this.mesh.updateMatrixWorld(true);
         this.currentState = SurvivorState.WAVING;
 
         if (autoFade) {
@@ -404,11 +398,9 @@ export class Survivor {
     }
 
     update(deltaTime, hookPosition = null) {
-        Object.values(this.mixers).forEach(mixer => {
-            if (mixer) {
-                mixer.update(deltaTime);
-            }
-        });
+        if (this.mixer) {
+            this.mixer.update(deltaTime);
+        }
 
         if (this.isFading && this.mesh && this.mesh.visible) {
             this.fadeTimer += deltaTime;
@@ -426,12 +418,14 @@ export class Survivor {
             case SurvivorState.ON_RAFT:
                 if (this.mesh && this.raftPosition) {
                     this.mesh.position.copy(this.raftPosition);
+                    this.mesh.visible = true;
                 }
                 break;
             case SurvivorState.WINCHING:
-                if (hookPosition && this.mesh && this.mesh.visible) {
+                if (hookPosition && this.mesh) {
                     this.mesh.position.copy(hookPosition);
                     this.mesh.position.y -= this.handOffset;
+                    this.mesh.visible = true;
                 }
                 break;
         }

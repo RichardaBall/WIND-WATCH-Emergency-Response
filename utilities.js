@@ -2,7 +2,7 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 
 export class DeveloperTool {
-    constructor(weatherSystem, windFarm = null, mainBase = null, helicopterPlayer = null, camera = null, renderer = null, winchSystem = null, scene = null, rescueMission = null) {
+    constructor(weatherSystem, windFarm = null, mainBase = null, helicopterPlayer = null, camera = null, renderer = null, winchSystem = null, scene = null, rescueMission = null, directionalLight = null) {
         this.weatherSystem = weatherSystem;
         this.windFarm = windFarm;
         this.mainBase = mainBase;
@@ -12,6 +12,7 @@ export class DeveloperTool {
         this.winchSystem = winchSystem;
         this.scene = scene || (camera && camera.parent ? camera.parent : null);
         this.rescueMission = rescueMission;
+        this.directionalLight = directionalLight;
 
         this.isVisible = false;
         this.container = null;
@@ -20,7 +21,7 @@ export class DeveloperTool {
         this.isCollisionEnabled = true;
         this.isPaused = false;
         this.isFastForwarding = false;
-        this.fastForwardMultiplier = 10.0; // 10x speed when holding fast forward
+        this.fastForwardMultiplier = 10.0;
 
         if (this.camera && this.renderer) {
             this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -29,7 +30,6 @@ export class DeveloperTool {
             this.orbitControls.dampingFactor = 0.05;
         }
 
-        // Free-cam & smooth transition state
         this.keysDown = {};
         this.isTransitioning = false;
         this.transitionStartPos = new THREE.Vector3();
@@ -37,7 +37,7 @@ export class DeveloperTool {
         this.transitionStartTarget = new THREE.Vector3();
         this.transitionTargetTarget = new THREE.Vector3();
         this.transitionProgress = 0;
-        this.transitionDuration = 0.8; // seconds
+        this.transitionDuration = 0.8;
 
         this.initUI();
         this.initListeners();
@@ -49,8 +49,9 @@ export class DeveloperTool {
         this.container.id = 'developer-tool-ui';
         this.container.style.cssText = `
             position: fixed;
-            top: 20px;
-            left: 20px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             width: 320px;
             background: rgba(15, 23, 42, 0.95);
             border: 1px solid rgba(56, 189, 248, 0.4);
@@ -69,12 +70,12 @@ export class DeveloperTool {
 
         this.container.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
-                <span style="font-weight: bold; color: #38bdf8; letter-spacing: 1px;">DEVELOPER TOOL [T]</span>
+                <span style="font-weight: bold; color: #38bdf8; letter-spacing: 1px;">SETTINGS [T]</span>
                 <button id="dev-tool-close" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; font-size: 16px; font-weight: bold;">&times;</button>
             </div>
 
             <div style="margin-bottom: 14px;">
-                <label style="display: block; color: #94a3b8; margin-bottom: 6px; font-size: 11px; text-transform: uppercase;">Time of Day</label>
+                <label style="display: block; text-align: center; color: #94a3b8; margin-bottom: 6px; font-size: 11px; text-transform: uppercase;">Time of Day</label>
                 <div style="display: flex; gap: 8px;">
                     <button id="dev-btn-day" style="flex: 1; background: #0284c7; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s;">Day</button>
                     <button id="dev-btn-night" style="flex: 1; background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s;">Night</button>
@@ -82,16 +83,16 @@ export class DeveloperTool {
             </div>
 
             <div style="margin-bottom: 14px;">
-                <label style="display: block; color: #94a3b8; margin-bottom: 6px; font-size: 11px; text-transform: uppercase;">Weather Condition</label>
+                <label style="display: block; text-align: center; color: #94a3b8; margin-bottom: 6px; font-size: 11px; text-transform: uppercase;">Weather Condition</label>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <button id="dev-btn-fine" style="background: #0ea5e9; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">☀ Fine Weather</button>
-                    <button id="dev-btn-rain" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">🌧️ Rain</button>
+                    <button id="dev-btn-rain" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">🌧️️ Rain</button>
                     <button id="dev-btn-storm" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">⚡ Storm</button>
                 </div>
             </div>
 
             <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; margin-bottom: 14px;">
-                <label style="display: block; color: #38bdf8; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; font-weight: bold;">Camera & Physics</label>
+                <label style="display: block; text-align: center; color: #38bdf8; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; font-weight: bold;">Camera & Physics</label>
                 <div style="display: flex; gap: 6px; margin-bottom: 6px;">
                     <button id="dev-collision" style="flex: 1; background: #10b981; border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">🛡️ Collision: ON</button>
                 </div>
@@ -162,7 +163,6 @@ export class DeveloperTool {
             this.togglePause();
         });
 
-        // Fast forward press-and-hold handlers
         const ffBtn = document.getElementById('dev-fast-forward');
         if (ffBtn) {
             const startFF = (e) => {
@@ -282,10 +282,6 @@ export class DeveloperTool {
 
             if (this.isFastForwarding) {
                 delta *= this.fastForwardMultiplier;
-                // Also optionally scale weather time propagation if integrated
-                if (this.weatherSystem && typeof this.weatherSystem.update === 'function') {
-                    // Weather system updates relative to delta time passed to it in main.js
-                }
             }
 
             if (this.isTransitioning && this.camera && this.orbitControls) {
@@ -327,7 +323,7 @@ export class DeveloperTool {
                 let vertDelta = 0;
                 if (this.keysDown['KeyE'] || this.keysDown['Space']) vertDelta += moveSpeed;
                 if (this.keysDown['KeyQ'] || this.keysDown['ControlLeft']) vertDelta -= moveSpeed;
-                if (vertDelta !==0) {
+                if (vertDelta !== 0) {
                     this.camera.position.y += vertDelta;
                     this.orbitControls.target.y += vertDelta;
                     this.orbitControls.update();

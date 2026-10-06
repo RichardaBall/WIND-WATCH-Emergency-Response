@@ -58,7 +58,6 @@ let heliLightsGroup;
 let heliShadow = null;
 let cachedShadowTexture = null;
 
-// Global single keydown event listener for helicopter systems (Q, F, E, G, X)
 window.addEventListener('keydown', (e) => {
     if (!helicopterPlayer) return;
     if (e.repeat) return;
@@ -82,7 +81,6 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// Wire up click event listeners for system status buttons and Load Game start button
 window.addEventListener('DOMContentLoaded', () => {
     const loadGameBtn = document.getElementById('load-game-btn');
     const startScreen = document.getElementById('start-screen');
@@ -90,7 +88,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (loadGameBtn) {
         loadGameBtn.addEventListener('click', async () => {
-            // 1. Initialize and play loading music on loop from root directory at half volume
             loadingMusic = new Audio('loadingmusic.mp3');
             loadingMusic.loop = true;
             loadingMusic.volume = 0.1;
@@ -100,7 +97,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 console.warn("Loading music playback prevented or failed:", err);
             }
 
-            // 2. Hide start screen and show progress loading screen
             if (startScreen) {
                 startScreen.style.opacity = '0';
                 setTimeout(() => {
@@ -111,7 +107,6 @@ window.addEventListener('DOMContentLoaded', () => {
                 loadingScreen.style.display = 'flex';
             }
 
-            // 3. Kick off asset loading pipeline
             initializeGameAssets();
         });
     }
@@ -146,6 +141,26 @@ window.addEventListener('DOMContentLoaded', () => {
             if (inputManager) {
                 inputManager.landingLightOn = !inputManager.landingLightOn;
                 if (soundManager) soundManager.playToggleSwitchSound(inputManager.landingLightOn);
+            }
+        });
+    }
+
+    const settingsBtn = document.getElementById('settings-btn');
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', () => {
+            if (developerTool) {
+                developerTool.toggle();
+            }
+        });
+    }
+
+    const kneeboardToggleBtn = document.getElementById('kneeboard-toggle-btn');
+    if (kneeboardToggleBtn) {
+        kneeboardToggleBtn.addEventListener('click', () => {
+            if (kneeboard && kneeboard.container) {
+                const isHidden = window.getComputedStyle(kneeboard.container).display === 'none';
+                kneeboard.container.style.display = isHidden ? 'block' : 'none';
+                kneeboardToggleBtn.classList.toggle('active', isHidden);
             }
         });
     }
@@ -196,8 +211,10 @@ function respawnGame() {
         sharkCatchSystem.reset(shark);
     }
 
-    if (kneeboard && kneeboard.domElement) {
-        kneeboard.domElement.style.display = 'block';
+    if (kneeboard && kneeboard.container) {
+        kneeboard.container.style.display = 'block';
+        const kneeboardToggleBtn = document.getElementById('kneeboard-toggle-btn');
+        if (kneeboardToggleBtn) kneeboardToggleBtn.classList.add('active');
     }
 
     if (navRadio && navRadio.container) {
@@ -220,7 +237,6 @@ function respawnGame() {
     }
 }
 
-// Initialize Loading Manager to track asset loading progress across all models globally
 const loadingManager = new THREE.LoadingManager(
     async () => {
         console.log("LoadingManager: All assets loaded successfully.");
@@ -249,7 +265,7 @@ const loadingManager = new THREE.LoadingManager(
             rescueMission && rescueMission.survivor ? rescueMission.survivor.mesh : null,
             rescueMission && rescueMission.survivor ? rescueMission.survivor.raisingMesh : null,
             rescueMission && rescueMission.survivor ? rescueMission.survivor.walkingMesh : null,
-            rescueMission && rescueMission.survivor ? rescueMission.survivor.wavingMesh : null,
+            rescueMission && rescueMission.survivor ? rescueMission.survivor.wavingMesh : null
         ];
 
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -258,7 +274,6 @@ const loadingManager = new THREE.LoadingManager(
 
         renderer.render(scene, camera);
 
-        // Smoothly fade out loading music
         if (loadingMusic) {
             const fadeDuration = 1000;
             const fadeSteps = 20;
@@ -300,7 +315,6 @@ const loadingManager = new THREE.LoadingManager(
     }
 );
 
-// Configure DRACOLoader instance with valid Google CDN decoder path
 const dracoLoader = new DRACOLoader(loadingManager);
 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
 
@@ -402,7 +416,18 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
 
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
 
-    developerTool = new DeveloperTool(weatherSystem, windFarm, mainBase, helicopterPlayer, camera, renderer, rescueMission ? rescueMission.winchSystem : null);
+    developerTool = new DeveloperTool(
+        weatherSystem, 
+        windFarm, 
+        mainBase, 
+        helicopterPlayer, 
+        camera, 
+        renderer, 
+        rescueMission ? rescueMission.winchSystem : null, 
+        scene, 
+        rescueMission, 
+        sunLight
+    );
 
     if (camera && inputManager) {
         const elevationAngle = 45 * (Math.PI / 180);
@@ -436,10 +461,12 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
             });
         }
 
-        if (kneeboard && kneeboard.domElement) {
-            const kbDisplay = window.getComputedStyle(kneeboard.domElement).display;
+        if (kneeboard && kneeboard.container) {
+            const kbDisplay = window.getComputedStyle(kneeboard.container).display;
             if (kbDisplay !== 'none') {
-                kneeboard.domElement.style.display = 'none';
+                kneeboard.container.style.display = 'none';
+                const kneeboardToggleBtn = document.getElementById('kneeboard-toggle-btn');
+                if (kneeboardToggleBtn) kneeboardToggleBtn.classList.remove('active');
             }
         }
 
@@ -627,6 +654,7 @@ function animate() {
     const btnEngine = document.getElementById('status-engine');
     const btnGear = document.getElementById('status-gear');
     const btnLight = document.getElementById('status-light');
+    const kneeboardToggleBtn = document.getElementById('kneeboard-toggle-btn');
 
     if (helicopterPlayer) {
         const electricalActive = !!helicopterPlayer.isElectricalOn;
@@ -655,6 +683,12 @@ function animate() {
         const lightActive = !!inputManager.landingLightOn;
         btnLight.classList.toggle('active', lightActive);
         btnLight.style.color = lightActive ? '#2ecc71' : '';
+    }
+
+    if (kneeboard && kneeboard.container && kneeboardToggleBtn) {
+        const isKbOpen = window.getComputedStyle(kneeboard.container).display !== 'none';
+        kneeboardToggleBtn.classList.toggle('active', isKbOpen);
+        kneeboardToggleBtn.style.color = isKbOpen ? '#2ecc71' : '';
     }
 
     if (renderer && scene && camera) {

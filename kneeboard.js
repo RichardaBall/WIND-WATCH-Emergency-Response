@@ -21,7 +21,7 @@ export class Kneeboard {
         this.container.id = 'pilot-kneeboard';
         this.container.style.cssText = `
             position: absolute;
-            bottom: 30px;
+            bottom: 65px;
             left: 30px;
             width: 350px;
             background: #d8d0b0;
