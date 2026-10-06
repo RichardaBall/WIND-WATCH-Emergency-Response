@@ -16,8 +16,18 @@ export class NavIndicator {
         this.ringOD = config.ringOD !== undefined ? config.ringOD : 0.75;
         this.arrowLength = config.arrowLength !== undefined ? config.arrowLength : 0.6;
 
+        // Customization options (High contrast & pulse enabled by default per preference)
+        this.showCompassRing = false;
+        this.neonGlowBoost = true;
+        this.signalPulse = true;
+        this.pulseSpeed = 0.01;       
+        this.arrowScale = 2.0;
+        this.arrowColorHex = 0xffea00; // Default neon bright yellow/amber
+
+        this._pulseTime = 0;
+
         this.pointerMaterial = new THREE.MeshBasicMaterial({
-            color: 0xffd000,
+            color: this.arrowColorHex,
             side: THREE.DoubleSide
         });
 
@@ -32,16 +42,42 @@ export class NavIndicator {
 
         this.mesh = new THREE.Group();
 
+        // Optional translucent compass ring / dial face
+        if (this.showCompassRing) {
+            const ringRadius = Math.max(0.1, this.ringOD / 2);
+            const ringGeo = new THREE.RingGeometry(ringRadius * 0.85, ringRadius, 32);
+            ringGeo.rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0xffb703,
+                transparent: true,
+                opacity: 0.35,
+                side: THREE.DoubleSide
+            });
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            this.mesh.add(ringMesh);
+        }
+
         this.pointerGroup = new THREE.Group();
         const outerRadius = Math.max(0.05, this.ringOD / 2);
         const tipWidth = Math.min(0.08, outerRadius * 0.4);
         const tipGeo = new THREE.ConeGeometry(tipWidth, tipWidth * 2.5, 12);
         tipGeo.rotateX(Math.PI / 2);
+
+        // Update material color based on settings
+        if (this.neonGlowBoost) {
+            this.pointerMaterial.color.setHex(this.arrowColorHex);
+        } else {
+            this.pointerMaterial.color.setHex(this.arrowColorHex);
+        }
+
         const tipMesh = new THREE.Mesh(tipGeo, this.pointerMaterial);
         tipMesh.position.set(0, 0, this.arrowLength);
         this.pointerGroup.add(tipMesh);
-        this.mesh.add(this.pointerGroup);
+        
+        // Apply overall arrow scale
+        this.pointerGroup.scale.set(this.arrowScale, this.arrowScale, this.arrowScale);
 
+        this.mesh.add(this.pointerGroup);
         this.mesh.position.set(this.offsetX, this.offsetY, this.offsetZ);
         this.mesh.visible = false;
 
@@ -51,21 +87,7 @@ export class NavIndicator {
     }
 
     rebuildGeometry() {
-        if (this.mesh) {
-            this.mesh.clear();
-        }
-
-        this.pointerGroup = new THREE.Group();
-        const outerRadius = Math.max(0.05, this.ringOD / 2);
-        const tipWidth = Math.min(0.08, outerRadius * 0.4);
-        const tipGeo = new THREE.ConeGeometry(tipWidth, tipWidth * 2.5, 12);
-        tipGeo.rotateX(Math.PI / 2);
-        const tipMesh = new THREE.Mesh(tipGeo, this.pointerMaterial);
-        tipMesh.position.set(0, 0, this.arrowLength);
-        this.pointerGroup.add(tipMesh);
-        this.mesh.add(this.pointerGroup);
-
-        this.mesh.position.set(this.offsetX, this.offsetY, this.offsetZ);
+        this.createMesh();
     }
 
     createTunerUI() {
@@ -78,7 +100,7 @@ export class NavIndicator {
             position: fixed;
             top: 20px;
             left: 20px;
-            width: 240px;
+            width: 260px;
             background: rgba(17, 18, 21, 0.92);
             border: 2px solid #ffb703;
             border-radius: 6px;
@@ -92,13 +114,40 @@ export class NavIndicator {
             pointer-events: auto;
         `;
 
+        const hexString = '#' + this.arrowColorHex.toString(16).padStart(6, '0');
+
         this.tunerContainer.innerHTML = `
             <div style="font-size: 10px; font-weight: bold; color: #ffb703; margin-bottom: 8px; border-bottom: 1px solid #374151; padding-bottom: 4px; display: flex; justify-content: space-between;">
                 <span>NAV INDICATOR TUNER</span>
                 <span style="color: #9ca3af; font-size: 8px;">[Press I to Hide]</span>
             </div>
-            <div style="font-size: 8px; margin-bottom: 6px; color: #9ca3af;">Adjust position & scale over rotor:</div>
+            <div style="font-size: 8px; margin-bottom: 6px; color: #9ca3af;">Tinker with visibility styles & scale:</div>
             
+            <div style="margin-bottom: 6px; background: rgba(255,183,3,0.08); padding: 6px; border-radius: 4px;">
+                <div style="font-size: 8px; font-weight: bold; color: #ffb703; margin-bottom: 4px;">VISUAL STYLES:</div>
+                <label style="display: flex; align-items: center; font-size: 8px; cursor: pointer; margin-bottom: 3px;">
+                    <input type="checkbox" id="chk-ring" ${this.showCompassRing ? 'checked' : ''} style="margin-right: 6px; cursor: pointer;"> Show Translucent Compass Ring
+                </label>
+                <label style="display: flex; align-items: center; font-size: 8px; cursor: pointer; margin-bottom: 3px;">
+                    <input type="checkbox" id="chk-neon" ${this.neonGlowBoost ? 'checked' : ''} style="margin-right: 6px; cursor: pointer;"> High-Contrast Neon Boost
+                </label>
+                <label style="display: flex; align-items: center; font-size: 8px; cursor: pointer; margin-bottom: 5px;">
+                    <input type="checkbox" id="chk-pulse" ${this.signalPulse ? 'checked' : ''} style="margin-right: 6px; cursor: pointer;"> Signal Lock Pulse Animation
+                </label>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 8px; margin-bottom: 3px;">
+                    <label>Arrow Color:</label>
+                    <input type="color" id="picker-color" value="${hexString}" style="cursor: pointer; border: none; width: 24px; height: 16px; background: none;">
+                </div>
+            </div>
+
+            <div style="margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; font-size: 8px;"><label>Pulse Speed:</label><span id="val-pulse">${this.pulseSpeed.toFixed(2)}</span></div>
+                <input type="range" id="slider-pulse" min="0.01" max="0.20" step="0.01" value="${this.pulseSpeed}" style="width: 100%; cursor: pointer;">
+            </div>
+            <div style="margin-bottom: 6px;">
+                <div style="display: flex; justify-content: space-between; font-size: 8px;"><label>Arrow Scale:</label><span id="val-scale">${this.arrowScale.toFixed(2)}</span></div>
+                <input type="range" id="slider-scale" min="0.2" max="3.0" step="0.05" value="${this.arrowScale}" style="width: 100%; cursor: pointer;">
+            </div>
             <div style="margin-bottom: 6px;">
                 <div style="display: flex; justify-content: space-between; font-size: 8px;"><label>X Offset:</label><span id="val-x">${this.offsetX.toFixed(2)}</span></div>
                 <input type="range" id="slider-x" min="-3" max="3" step="0.05" value="${this.offsetX}" style="width: 100%; cursor: pointer;">
@@ -125,6 +174,7 @@ export class NavIndicator {
         const bindSlider = (id, valId, property, needsRebuild = false) => {
             const slider = this.tunerContainer.querySelector(`#slider-${id}`);
             const span = this.tunerContainer.querySelector(`#val-${valId}`);
+            if (!slider) return;
             slider.addEventListener('input', (e) => {
                 const val = parseFloat(e.target.value);
                 this[property] = val;
@@ -143,6 +193,32 @@ export class NavIndicator {
         bindSlider('z', 'z', 'offsetZ', false);
         bindSlider('ring', 'ring', 'ringOD', true);
         bindSlider('arrow', 'arrow', 'arrowLength', true);
+        bindSlider('scale', 'scale', 'arrowScale', true);
+        bindSlider('pulse', 'pulse', 'pulseSpeed', false);
+
+        // Bind checkboxes
+        const bindCheckbox = (id, property) => {
+            const chk = this.tunerContainer.querySelector(`#${id}`);
+            if (!chk) return;
+            chk.addEventListener('change', (e) => {
+                this[property] = e.target.checked;
+                this.rebuildGeometry();
+            });
+        };
+
+        bindCheckbox('chk-ring', 'showCompassRing');
+        bindCheckbox('chk-neon', 'neonGlowBoost');
+        bindCheckbox('chk-pulse', 'signalPulse');
+
+        // Bind color picker
+        const colorPicker = this.tunerContainer.querySelector('#picker-color');
+        if (colorPicker) {
+            colorPicker.addEventListener('input', (e) => {
+                const hexVal = e.target.value.replace('#', '');
+                this.arrowColorHex = parseInt(hexVal, 16);
+                this.rebuildGeometry();
+            });
+        }
 
         if (!window.__navTunerKeyBound) {
             window.__navTunerKeyBound = true;
@@ -188,6 +264,16 @@ export class NavIndicator {
 
         if (this.pointerGroup) {
             this.pointerGroup.rotation.y = targetWorldAngle - heliHeading;
+
+            // Signal lock pulse animation using dynamic pulseSpeed
+            if (this.signalPulse) {
+                this._pulseTime += this.pulseSpeed;
+                const pulseFactor = 1.0 + Math.sin(this._pulseTime * 4) * 0.12;
+                const combinedScale = this.arrowScale * pulseFactor;
+                this.pointerGroup.scale.set(combinedScale, combinedScale, combinedScale);
+            } else {
+                this.pointerGroup.scale.set(this.arrowScale, this.arrowScale, this.arrowScale);
+            }
         }
     }
 }
