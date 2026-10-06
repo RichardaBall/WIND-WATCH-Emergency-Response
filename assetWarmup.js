@@ -15,7 +15,7 @@ export class AssetWarmupSystem {
    * @param {THREE.Camera} camera 
    * @param {Array<THREE.Object3D|Object>} [extraModels=[]] - Standalone GLTF models or system meshes.
    */
-  static warmup(renderer, scene, camera, extraModels = []) {
+  static async warmup(renderer, scene, camera, extraModels = []) {
     if (!renderer || !scene || !camera) return;
 
     const hiddenObjects = [];
@@ -71,8 +71,14 @@ export class AssetWarmupSystem {
       }
     });
 
+    // Yield to the browser UI thread to keep the page responsive
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
     // 3. Force WebGL shader compilation across all models & skinning shader combinations
     renderer.compile(scene, camera);
+
+    // Yield after compilation pass
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     // 4. Execute off-screen render pass to finalize GPU pipeline state creation
     renderer.render(scene, camera);

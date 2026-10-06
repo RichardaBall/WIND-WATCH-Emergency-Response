@@ -189,8 +189,17 @@ function respawnGame() {
 
 // Initialize Loading Manager to track asset loading progress across all models globally
 const loadingManager = new THREE.LoadingManager(
-    () => {
+    async () => {
         console.log("LoadingManager: All assets loaded successfully.");
+        
+        const progressBar = document.getElementById('loading-progress');
+        const loadingStatus = document.getElementById('loading-status');
+        if (progressBar) progressBar.style.width = '100%';
+        if (loadingStatus) loadingStatus.textContent = 'Preparing scene & compiling shaders...';
+
+        // Yield thread to allow browser to render 100% progress state
+        await new Promise((resolve) => setTimeout(resolve, 20));
+
         if (loadedGltfHeli && loadedSpawnPosition) {
             initGameAfterLoad(loadedGltfHeli, loadedSpawnPosition);
         } else {
@@ -213,10 +222,16 @@ const loadingManager = new THREE.LoadingManager(
             rescueMission && rescueMission.survivor ? rescueMission.survivor.wavingMesh : null,
         ];
 
-        // Execute pre-compilation warm-up to upload all shaders & textures before starting flight
-        AssetWarmupSystem.warmup(renderer, scene, camera, extraModels);
+        // Yield thread before launching GPU compilation pass
+        await new Promise((resolve) => setTimeout(resolve, 20));
 
-        // Double rAF ensures render queue clears before hiding loading screen
+        // Execute pre-compilation warm-up asynchronously to upload all shaders & textures before starting flight
+        await AssetWarmupSystem.warmup(renderer, scene, camera, extraModels);
+
+        // Force direct initial render of the prepared scene while loading screen overlay is still opaque
+        renderer.render(scene, camera);
+
+        // Double rAF ensures GPU buffer swap clears before fading out loading overlay
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 const loadingScreen = document.getElementById('loading-screen');
