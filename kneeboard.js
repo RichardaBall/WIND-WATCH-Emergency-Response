@@ -188,45 +188,45 @@ export class Kneeboard {
         this.page3El = document.createElement('div');
         this.page3El.style.cssText = this.getPageStyle(2);
         this.page3El.innerHTML = `
-            <div style="font-weight: bold; text-align: center; text-decoration: underline; font-size: 12px; margin-bottom: 6px; color: #3a3525; letter-spacing: 0.5px;">MANIFEST</div>
+            <div style="font-weight: bold; text-align: center; text-decoration: underline; font-size: 12px; margin-bottom: 8px; color: #3a3525; letter-spacing: 0.5px;">MANIFEST</div>
 
-            <div style="margin-bottom: 5px; font-size: 10px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">REFUEL MANIFEST (Max 1000 kg)</div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 1px;">
+            <div style="margin-bottom: 10px; font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">REFUEL MANIFEST (Max 1000 kg)</div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
                     <span>Fuel Load:</span><span><strong id="kb-fuel-val">1000</strong> kg</span>
                 </div>
-                <input type="range" id="kb-fuel-slider" min="0" max="1000" value="1000" step="10" style="width: 100%; accent-color: #4a4532; cursor: pointer; height: 14px;">
+                <input type="range" id="kb-fuel-slider" min="0" max="1000" value="1000" step="10" style="width: 100%; accent-color: #4a4532; cursor: pointer;">
             </div>
 
-            <div style="margin-bottom: 5px; font-size: 10px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">WATER TANK MANIFEST (Max 1000 kg)</div>
-                <div style="display: flex; justify-content: space-between; margin-bottom: 1px;">
+            <div style="margin-bottom: 10px; font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">WATER TANK MANIFEST (Max 1000 kg)</div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
                     <span>Water Load:</span><span><strong id="kb-water-val">1000</strong> kg</span>
                 </div>
-                <input type="range" id="kb-water-slider" min="0" max="1000" value="1000" step="10" style="width: 100%; accent-color: #2675b4; cursor: pointer; height: 14px;">
+                <input type="range" id="kb-water-slider" min="0" max="1000" value="1000" step="10" style="width: 100%; accent-color: #2675b4; cursor: pointer;">
             </div>
 
-            <div style="margin-bottom: 5px; font-size: 10px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px;">WATER TANK STATUS</div>
-                <div style="background: #c9bf9b; border: 2px solid #4a4532; border-radius: 4px; padding: 4px; text-align: center;">
-                    <div style="font-size: 9px; font-weight: bold; margin-bottom: 3px; color: #1c4e80;">[ FIREFIGHTING TANK ]</div>
-                    <div style="width: 100%; background: #b0a682; height: 12px; border: 1px solid #4a4532; border-radius: 3px; overflow: hidden; position: relative;">
+            <div style="margin-bottom: 10px; font-size: 11px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px;">WATER TANK STATUS</div>
+                <div style="background: #c9bf9b; border: 2px solid #4a4532; border-radius: 4px; padding: 8px; text-align: center;">
+                    <div style="font-size: 10px; font-weight: bold; margin-bottom: 6px; color: #1c4e80;">[ FIREFIGHTING TANK ]</div>
+                    <div style="width: 100%; background: #b0a682; height: 18px; border: 1px solid #4a4532; border-radius: 3px; overflow: hidden; position: relative;">
                         <div id="kb-water-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #38bdf8, #0284c7); transition: width 0.1s ease-out;"></div>
-                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8);">
+                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.8);">
                             <span id="kb-water-pct">100</span>%
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div style="font-size: 10px; font-weight: bold; border-top: 1px dashed #6b634b; padding-top: 3px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <div style="font-size: 11px; font-weight: bold; border-top: 1px dashed #6b634b; padding-top: 6px; margin-bottom: 8px; display: flex; justify-content: space-between;">
                 <span>Total Gross Mass:</span><span><strong id="kb-total-mass">6600</strong> kg</span>
             </div>
 
-            <div style="font-size: 10px; border-top: 1px dashed #6b634b; padding-top: 3px;">
-                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 2px; color: #111111;">PILOT'S NOTES:</div>
-                <div style="font-family: 'Brush Script MT', 'Comic Sans MS', cursive, sans-serif; font-size: 20px; color: #000000; line-height: 1.15; transform: rotate(-0.5deg);">
-                    Platform workers reporting large marine life circling the base again. Keep winching cables clear during ops—had a near miss with a greedy apex predator taking a bite at the hook last Tuesday.
+            <div style="font-size: 10px; border-top: 1px dashed #6b634b; padding-top: 6px;">
+                <div style="font-weight: bold; text-decoration: underline; margin-bottom: 3px; color: #3a3525;">PILOT NOTES:</div>
+                <div style="color: #2c281c; line-height: 1.3;">
+                    Platform workers reporting large marine life circling the base again. Keep winching cables clear during ops - had a near miss with a greedy apex predator taking a bite at the hook last Tuesday.
                 </div>
             </div>
         `;
@@ -523,7 +523,7 @@ export class Kneeboard {
             if (allowed && fuelSlider && !this.isFuelDragging && player.fuelKg !== undefined) {
                 fuelSlider.value = player.fuelKg;
                 const fuelVal = document.getElementById('kb-fuel-val');
-                if (fuelVal) fuelVal.innerText = Math.round(player.fuelkg);
+                if (fuelVal) fuelVal.innerText = Math.round(player.fuelKg);
             }
 
             if (allowed && waterSlider && !this.isWaterDragging && player.waterTankKg !== undefined) {
