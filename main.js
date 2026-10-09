@@ -19,6 +19,7 @@ import { RotorWashSystem } from './rotorWashSystem.js';
 import { HelipadDebrisSystem } from './helipadDebrisSystem.js';
 import { DeveloperTool } from './utilities.js';
 import { RescueMission } from './rescueMission.js';
+import { FishermanRescueMission } from './fishermanRescue.js';
 import { SearchLightSystem } from './searchlight.js';
 import { BuoySystem } from './buoy.js';
 import { Shark } from './shark.js';
@@ -47,6 +48,7 @@ let windFarm = null;
 let developerTool = null;
 let liferaftManager = null;
 let rescueMission = null;
+let fishermanRescueMission = null;
 let searchLightSystem = null;
 let buoySystem = null;
 let shark = null;
@@ -81,6 +83,9 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyX') {
         if (rescueMission) {
             rescueMission.toggleWinch(helicopterPlayer);
+        }
+        if (fishermanRescueMission) {
+            fishermanRescueMission.toggleWinch(helicopterPlayer);
         }
     }
 });
@@ -211,6 +216,10 @@ function respawnGame() {
         rescueMission.reset();
     }
 
+    if (fishermanRescueMission && typeof fishermanRescueMission.reset === 'function') {
+        fishermanRescueMission.reset();
+    }
+
     if (sharkCatchSystem && shark) {
         sharkCatchSystem.reset(shark);
     }
@@ -262,6 +271,10 @@ const loadingManager = new THREE.LoadingManager(
             rescueMission.warmup(renderer, camera);
         }
 
+        if (fishermanRescueMission && typeof fishermanRescueMission.warmup === 'function') {
+            fishermanRescueMission.warmup(renderer, camera);
+        }
+
         const extraModels = [
             shark ? shark.mesh : null,
             sharkCatchSystem ? sharkCatchSystem.caughtSharkMesh : null,
@@ -269,7 +282,10 @@ const loadingManager = new THREE.LoadingManager(
             rescueMission && rescueMission.survivor ? rescueMission.survivor.mesh : null,
             rescueMission && rescueMission.survivor ? rescueMission.survivor.raisingMesh : null,
             rescueMission && rescueMission.survivor ? rescueMission.survivor.walkingMesh : null,
-            rescueMission && rescueMission.survivor ? rescueMission.survivor.wavingMesh : null
+            rescueMission && rescueMission.survivor ? rescueMission.survivor.wavingMesh : null,
+            fishermanRescueMission ? fishermanRescueMission.boatMesh : null,
+            fishermanRescueMission && fishermanRescueMission.survivor1 ? fishermanRescueMission.survivor1.mesh : null,
+            fishermanRescueMission && fishermanRescueMission.survivor2 ? fishermanRescueMission.survivor2.mesh : null
         ];
 
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -328,6 +344,7 @@ loader.setDRACOLoader(dracoLoader);
 function initializeGameAssets() {
     liferaftManager = new LiferaftManager(scene, loadingManager);
     rescueMission = new RescueMission(scene, loadingManager, pager);
+    fishermanRescueMission = new FishermanRescueMission(scene, loadingManager, mainBase, pager);
     windFarm = new WindFarm(scene, loadingManager, pager);
     buoySystem = new BuoySystem(scene, loadingManager);
 
@@ -413,6 +430,7 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
     helicopterPlayer = new HelicopterPlayer(model, gltfHeli.animations, mixer, soundManager);
 
     helicopterPlayer.rescueMission = rescueMission;
+    helicopterPlayer.fishermanRescueMission = fishermanRescueMission;
 
     searchLightSystem = new SearchLightSystem(model, scene);
 
@@ -420,8 +438,8 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
 
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
 
-    // Initialize Mission Manager centrally controlling windfarm & rescue missions with pager
-    missionManager = new MissionManager(scene, rescueMission, windFarm, navRadio, pager);
+    // Initialize Mission Manager controlling rescue, windfarm, and fisherman missions with pager
+    missionManager = new MissionManager(scene, rescueMission, windFarm, fishermanRescueMission, navRadio, pager);
 
     developerTool = new DeveloperTool(
         weatherSystem, 
@@ -463,7 +481,6 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
             soundManager.playSplashSound();
         }
 
-        // Trigger mission manager crash handling (clears active mission, hides pager, starts 30s cooldown)
         if (missionManager) {
             missionManager.handleCrash();
         }
@@ -571,9 +588,8 @@ function animate() {
         liferaftManager.update(delta);
     }
 
-    // Central Mission Manager update replacing independent task ticks
     if (missionManager && helicopterPlayer) {
-        missionManager.update(delta, helicopterPlayer, mainBase);
+        missionManager.update(delta, helicopterPlayer, mainBase, waterSystem);
     }
 
     if (searchLightSystem && helicopterPlayer) {
