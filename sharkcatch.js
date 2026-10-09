@@ -23,7 +23,7 @@ export class SharkCatchSystem {
         this.gravity = 25.0; // Acceleration due to gravity (m/s^2)
 
         // Proximity threshold in meters (horizontal & vertical margin) to trigger bite/attachment
-        this.catchDistanceThreshold = 12.0;
+        this.catchDistanceThreshold = 3.0;
 
         // --- POSITION & ORIENTATION OFFSETS ---
         this.mouthOffset = new THREE.Vector3(-0.23, -5.54, -0.63);

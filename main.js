@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { setupScene } from './sceneSetup.js';
 import { WeatherSystem } from './weather.js';
 import { InputManager } from './inputManager.js';
@@ -97,6 +98,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (loadGameBtn) {
         loadGameBtn.addEventListener('click', async () => {
+            // Explicitly initialize and unlock the Web Audio context on user click
+            if (soundManager) {
+                soundManager.init();
+                soundManager.ensureContextRunning();
+            }
+
             loadingMusic = new Audio('loadingmusic.mp3');
             loadingMusic.loop = true;
             loadingMusic.volume = 0.1;
@@ -340,6 +347,7 @@ dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5
 
 const loader = new GLTFLoader(loadingManager);
 loader.setDRACOLoader(dracoLoader);
+loader.setMeshoptDecoder(MeshoptDecoder);
 
 function initializeGameAssets() {
     liferaftManager = new LiferaftManager(scene, loadingManager);
@@ -438,7 +446,6 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
 
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
 
-    // Initialize Mission Manager controlling rescue, windfarm, and fisherman missions with pager
     missionManager = new MissionManager(scene, rescueMission, windFarm, fishermanRescueMission, navRadio, pager);
 
     developerTool = new DeveloperTool(

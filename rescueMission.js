@@ -107,7 +107,6 @@ export class RescueMission {
         this.flashingMesh2.visible = false;
         this.scene.add(this.flashingMesh2);
 
-        // Final tuned offsets for liferaft2.glb light
         this.lightOffset2 = { x: 0.00, y: 0.37, z: -0.67 };
 
         this.searchlight = null;
@@ -466,7 +465,7 @@ export class RescueMission {
             if (this.flashingLight2) this.flashingLight2.position.set(lightX, customLightY, lightZ);
             if (this.flashingMesh2) this.flashingMesh2.position.set(lightX, customLightY, lightZ);
             if (this.flashingLight) this.flashingLight.position.set(0, -9999, 0);
-            if (this.flashingMesh) this.flashingMesh.position.set(0, -9999, 0);
+            if (this.flashingMesh) this.flashingMesh.visible = false;
         }
     }
 
@@ -564,8 +563,18 @@ export class RescueMission {
         }
         
         if (!this.survivorAttached && this.raftMesh && this.raftMesh.visible && hookPos) {
-            const distHookToRaft = hookPos.distanceTo(this.raftPosition);
-            if (distHookToRaft < 4.5) {
+            const localHookPos = hookPos.clone();
+            this.raftMesh.worldToLocal(localHookPos);
+
+            // Calibrated center points for liferaft.glb and liferaft2.glb
+            const center = (this.currentRaftIndex === 1)
+                ? new THREE.Vector3(-0.6, 0.6, 0.4)
+                : new THREE.Vector3(0, 0.8, 1.3);
+
+            const dist = localHookPos.distanceTo(center);
+            const catchRadius = 1.2; // Generous radius matching tuned box dimensions
+
+            if (dist <= catchRadius) {
                 this.survivorAttached = true;
                 this.state = 'WINCHING';
                 if (this.statusDisplay) {

@@ -24,7 +24,7 @@ export class WindFarm {
         this.smokeLifetimes = new Float32Array(this.smokeParticlesCount);
         this.smokeMaxLifetimes = new Float32Array(this.smokeParticlesCount);
 
-        this.waterHitsRequired = 30;
+        this.waterHitsRequired = 100;
         this.currentWaterHits = 0;
 
         // Fixed navigation frequencies for each WTG
@@ -353,7 +353,7 @@ export class WindFarm {
 
             if (waterSystem && waterSystem.particleGeometry) {
                 const waterPosArr = waterSystem.particleGeometry.attributes.position.array;
-                const hitRadius = 18.0;
+                const hitRadius = 2.0;
 
                 for (let p = 0; p < waterSystem.particlesCount; p++) {
                     const pIdx = p * 3;

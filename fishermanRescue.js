@@ -1,4 +1,3 @@
-// fishermanRescue.js
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -40,7 +39,7 @@ export class FishermanRescueMission {
 
         this.hasActiveFire = true;
         this.currentWaterHits = 0;
-        this.waterHitsRequired = 30;
+        this.waterHitsRequired = 100;
         this.fireParticleSystem = null;
         this.smokeParticleSystem = null;
         this.fireParticlesCount = 600;
@@ -521,7 +520,6 @@ export class FishermanRescueMission {
             this.mainBase = mainBase;
         }
 
-        // Synchronize searchlight target with the boat model position
         if (this.searchlightTarget) {
             if (this.boatModel && this.boatModel.visible) {
                 this.searchlightTarget.position.copy(this.boatModel.position);
@@ -601,7 +599,7 @@ export class FishermanRescueMission {
                 this.fireParticleSystem.getWorldPosition(fireWorldPos);
 
                 const waterPosArr = waterSystem.particleGeometry.attributes.position.array;
-                const hitRadius = 15.0 * this.fireScale;
+                const hitRadius = 5.0 * this.fireScale;
 
                 for (let p = 0; p < waterSystem.particlesCount; p++) {
                     const pIdx = p * 3;
@@ -639,18 +637,22 @@ export class FishermanRescueMission {
         const currentCableLength = winch.currentCableLength || 0.0;
 
         if (this.activeRescue === null && this.rescuedCount < 2 && this.boatModel && !this.hasActiveFire) {
-            if (this.petewaterObject && this.petewaterObject.visible) {
-                const pos = new THREE.Vector3();
-                this.petewaterObject.getWorldPosition(pos);
-                if (Math.hypot(hookPos.x - pos.x, hookPos.z - pos.z) <= 4.0 && Math.abs(hookPos.y - pos.y) <= 3.0) {
-                    this.triggerRescue('water');
+            // Check Petewaving (center: {x:6, y:0.6, z:-0.1})
+            if (this.petewavingObject && this.petewavingObject.visible) {
+                const localHookPos = hookPos.clone();
+                this.boatModel.worldToLocal(localHookPos);
+                const waveCenter = new THREE.Vector3(6, 0.6, -0.1);
+                if (localHookPos.distanceTo(waveCenter) <= 2.2) {
+                    this.triggerRescue('waving');
                 }
             }
-            if (this.activeRescue === null && this.petewavingObject && this.petewavingObject.visible) {
-                const pos = new THREE.Vector3();
-                this.petewavingObject.getWorldPosition(pos);
-                if (Math.hypot(hookPos.x - pos.x, hookPos.z - pos.z) <= 4.0 && Math.abs(hookPos.y - pos.y) <= 3.0) {
-                    this.triggerRescue('waving');
+            // Check Petewater (center: {x:7.2, y:-1.9, z:-7.4})
+            if (this.activeRescue === null && this.petewaterObject && this.petewaterObject.visible) {
+                const localHookPos = hookPos.clone();
+                this.boatModel.worldToLocal(localHookPos);
+                const waterCenter = new THREE.Vector3(7.2, -1.9, -7.4);
+                if (localHookPos.distanceTo(waterCenter) <= 2.2) {
+                    this.triggerRescue('water');
                 }
             }
         }

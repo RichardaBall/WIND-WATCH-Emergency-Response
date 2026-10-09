@@ -6,6 +6,15 @@ export class InputManager {
         this.landingLightOn = false;
 
         window.addEventListener('keydown', (e) => {
+            // --- NEW: Force unlock the Web Audio API on the first keystroke ---
+            if (this.soundManager) {
+                const ctx = this.soundManager.ctxMgr?.audioCtx || this.soundManager.audioCtx;
+                if (ctx && ctx.state === 'suspended') {
+                    ctx.resume().catch(() => {});
+                }
+            }
+            // ------------------------------------------------------------------
+
             if (e.target.closest && e.target.closest('#pilot-kneeboard')) return;
 
             if ([
