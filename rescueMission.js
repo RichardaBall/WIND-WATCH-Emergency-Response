@@ -77,6 +77,7 @@ export class RescueMission {
         this.statusDisplay = null;
         this._initUI();
         
+        // Light for liferaft.glb (Index 0)
         this.flashingLight = new THREE.PointLight(0xff5500, 0, 35);
         this.scene.add(this.flashingLight);
 
@@ -90,6 +91,24 @@ export class RescueMission {
         this.flashingMesh.position.set(0, -9999, 0);
         this.flashingMesh.visible = false;
         this.scene.add(this.flashingMesh);
+
+        // Separate light and half-size bulb for liferaft2.glb (Index 1)
+        this.flashingLight2 = new THREE.PointLight(0xff5500, 0, 35);
+        this.scene.add(this.flashingLight2);
+
+        const smallBulbGeo = new THREE.SphereGeometry(0.05, 16, 16);
+        this.flashingMat2 = new THREE.MeshStandardMaterial({ 
+            color: 0x220000, 
+            emissive: 0xff3300, 
+            emissiveIntensity: 6.0 
+        });
+        this.flashingMesh2 = new THREE.Mesh(smallBulbGeo, this.flashingMat2);
+        this.flashingMesh2.position.set(0, -9999, 0);
+        this.flashingMesh2.visible = false;
+        this.scene.add(this.flashingMesh2);
+
+        // Final tuned offsets for liferaft2.glb light
+        this.lightOffset2 = { x: 0.00, y: 0.37, z: -0.67 };
 
         this.searchlight = null;
         this.searchlightTarget = new THREE.Object3D();
@@ -159,8 +178,11 @@ export class RescueMission {
         });
         this.state = 'IDLE';
         this.survivorAttached = false;
+        this.currentRaftIndex = null;
         if (this.flashingLight) this.flashingLight.intensity = 0;
         if (this.flashingMesh) this.flashingMesh.visible = false;
+        if (this.flashingLight2) this.flashingLight2.intensity = 0;
+        if (this.flashingMesh2) this.flashingMesh2.visible = false;
         if (this.pagerElement) this.pagerElement.style.display = 'none';
     }
 
@@ -204,7 +226,7 @@ export class RescueMission {
         if (!renderer || !camera) return;
         const hiddenObjects = [];
         const culledObjects = [];
-        const targets = [this.fallbackMesh, this.flashingMesh];
+        const targets = [this.fallbackMesh, this.flashingMesh, this.flashingMesh2];
         this.raftTemplates.forEach((template) => { if (template) targets.push(template); });
         if (this.survivor) {
             if (this.survivor.mesh) targets.push(this.survivor.mesh);
@@ -356,7 +378,6 @@ export class RescueMission {
         this.survivorAttached = false;
         this.usingFallback = false;
         
-        // Ensure rescue mission frequencies do not conflict with fixed base (210) or WTGs (240, 290, 350)
         const excluded = [210, 240, 290, 350];
         const possible = [];
         for (let f = 200; f <= 400; f += 10) {
@@ -411,10 +432,12 @@ export class RescueMission {
             this.raftMesh.position.copy(this.raftPosition);
             this.raftMesh.position.y = -1.2;
             this.raftMesh.visible = true;
+            this.currentRaftIndex = null;
             return;
         }
 
         let chosenOriginalIndex = validIndices[Math.floor(Math.random() * validIndices.length)];
+        this.currentRaftIndex = chosenOriginalIndex;
         this.raftMesh = this.raftTemplates[chosenOriginalIndex];
         this._resetRaftVisibility(this.raftMesh);
 
@@ -430,8 +453,21 @@ export class RescueMission {
         }
 
         const lightY = this.raftPosition.y + 2.0;
-        if (this.flashingLight) this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
-        if (this.flashingMesh) this.flashingMesh.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
+
+        if (chosenOriginalIndex === 0) {
+            if (this.flashingLight) this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
+            if (this.flashingMesh) this.flashingMesh.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
+            if (this.flashingLight2) this.flashingLight2.position.set(0, -9999, 0);
+            if (this.flashingMesh2) this.flashingMesh2.position.set(0, -9999, 0);
+        } else if (chosenOriginalIndex === 1) {
+            const lightX = this.raftPosition.x + this.lightOffset2.x;
+            const customLightY = this.raftPosition.y + this.lightOffset2.y;
+            const lightZ = this.raftPosition.z + this.lightOffset2.z;
+            if (this.flashingLight2) this.flashingLight2.position.set(lightX, customLightY, lightZ);
+            if (this.flashingMesh2) this.flashingMesh2.position.set(lightX, customLightY, lightZ);
+            if (this.flashingLight) this.flashingLight.position.set(0, -9999, 0);
+            if (this.flashingMesh) this.flashingMesh.position.set(0, -9999, 0);
+        }
     }
 
     toggleWinch(helicopterPlayer) {
@@ -485,15 +521,25 @@ export class RescueMission {
         this.flashTimer += delta * 7;
         const flash = Math.sin(this.flashTimer) > 0 ? 1 : 0;
 
+        const activeLight = (this.currentRaftIndex === 1) ? this.flashingLight2 : this.flashingLight;
+        const activeMesh = (this.currentRaftIndex === 1) ? this.flashingMesh2 : this.flashingMesh;
+        const activeMat = (this.currentRaftIndex === 1) ? this.flashingMat2 : this.flashingMat;
+        const inactiveLight = (this.currentRaftIndex === 1) ? this.flashingLight : this.flashingLight2;
+        const inactiveMesh = (this.currentRaftIndex === 1) ? this.flashingMesh : this.flashingMesh2;
+
         if (!this.survivorAttached) {
-            if (this.flashingLight) this.flashingLight.intensity = flash ? 10.0 : 0.5;
-            if (this.flashingMesh && this.flashingMat) {
-                this.flashingMesh.visible = true;
-                this.flashingMat.emissive.setHex(flash ? 0xff3300 : 0x330f00);
+            if (activeLight) activeLight.intensity = flash ? 10.0 : 0.5;
+            if (activeMesh && activeMat) {
+                activeMesh.visible = true;
+                activeMat.emissive.setHex(flash ? 0xff3300 : 0x330f00);
             }
+            if (inactiveLight) inactiveLight.intensity = 0;
+            if (inactiveMesh) inactiveMesh.visible = false;
         } else {
             if (this.flashingLight) this.flashingLight.intensity = 0;
             if (this.flashingMesh) this.flashingMesh.visible = false;
+            if (this.flashingLight2) this.flashingLight2.intensity = 0;
+            if (this.flashingMesh2) this.flashingMesh2.visible = false;
         }
 
         if (this.pagerElement && this.pagerElement.style.display === 'block') {
@@ -527,6 +573,8 @@ export class RescueMission {
                 }
                 if (this.flashingLight) this.flashingLight.intensity = 0;
                 if (this.flashingMesh) this.flashingMesh.visible = false;
+                if (this.flashingLight2) this.flashingLight2.intensity = 0;
+                if (this.flashingMesh2) this.flashingMesh2.visible = false;
                 this._hideRaftSurvivor(this.raftMesh);
 
                 if (this.survivor) {
