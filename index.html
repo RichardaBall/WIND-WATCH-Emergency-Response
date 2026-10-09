@@ -253,6 +253,16 @@
             letter-spacing: 1px;
             text-shadow: 0 1px 3px rgba(0,0,0,0.8);
         }
+        .copyright-notice {
+            position: absolute;
+            bottom: -300px;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.7);
+            letter-spacing: 1px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+            z-index: 2;
+            user-select: none;
+        }
     </style>
     <!-- Import map for Three.js and addons -->
     <script type="importmap">
@@ -270,6 +280,7 @@
         <div class="loading-title">Wind Watch</div>
         <div class="loading-subtitle">Emergency Response</div>
         <button id="load-game-btn">START</button>
+        <div class="copyright-notice">&copy; 2026 Richard Ball. All rights reserved.</div>
     </div>
 
     <!-- Loading Screen Overlay -->
@@ -280,6 +291,7 @@
             <div id="loading-progress"></div>
         </div>
         <div id="loading-status">Initializing systems...</div>
+        <div class="copyright-notice">&copy; 2026 Richard Ball. All rights reserved.</div>
     </div>
 
     <!-- Settings / Developer Button (Top Left) -->
