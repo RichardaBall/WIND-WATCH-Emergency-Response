@@ -138,6 +138,18 @@ export class HelicopterPlayer {
         return this.soundManager;
     }
 
+    isStartingUp() {
+        return this.targetEnginePower > 0 && this.engineCooldownTimer > 0;
+    }
+
+    isShuttingDown() {
+        return this.targetEnginePower === 0 && this.engineCooldownTimer > 0;
+    }
+
+    isFuelPumpWarningActive() {
+        return this.isEngineRunning && !this.isFuelPumpOn;
+    }
+
     respawn(position) {
         if (!this.model) return;
         this.model.position.copy(position);

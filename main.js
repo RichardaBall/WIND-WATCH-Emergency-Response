@@ -698,18 +698,36 @@ function animate() {
         const fuelPumpActive = !!helicopterPlayer.isFuelPumpOn;
         const engineActive = !!helicopterPlayer.isEngineRunning;
         const gearUp = !!helicopterPlayer.isGearUp;
+        const isStarting = typeof helicopterPlayer.isStartingUp === 'function' ? helicopterPlayer.isStartingUp() : false;
+        const isStopping = typeof helicopterPlayer.isShuttingDown === 'function' ? helicopterPlayer.isShuttingDown() : false;
+        const fuelPumpWarning = typeof helicopterPlayer.isFuelPumpWarningActive === 'function' ? helicopterPlayer.isFuelPumpWarningActive() : false;
 
         if (btnBattery) {
             btnBattery.classList.toggle('active', electricalActive);
             btnBattery.style.color = electricalActive ? '#2ecc71' : '';
         }
         if (btnFuelPump) {
-            btnFuelPump.classList.toggle('active', fuelPumpActive);
-            btnFuelPump.style.color = fuelPumpActive ? '#2ecc71' : '';
+            btnFuelPump.classList.remove('flashing-red');
+            if (fuelPumpWarning) {
+                btnFuelPump.classList.add('flashing-red');
+                btnFuelPump.style.color = '#e74c3c';
+            } else {
+                btnFuelPump.classList.toggle('active', fuelPumpActive);
+                btnFuelPump.style.color = fuelPumpActive ? '#2ecc71' : '';
+            }
         }
         if (btnEngine) {
-            btnEngine.classList.toggle('active', engineActive);
-            btnEngine.style.color = engineActive ? '#2ecc71' : '';
+            btnEngine.classList.remove('flashing-yellow', 'flashing-red');
+            if (isStarting) {
+                btnEngine.classList.add('flashing-yellow');
+                btnEngine.style.color = '#f1c40f';
+            } else if (isStopping) {
+                btnEngine.classList.add('flashing-red');
+                btnEngine.style.color = '#e74c3c';
+            } else {
+                btnEngine.classList.toggle('active', engineActive);
+                btnEngine.style.color = engineActive ? '#2ecc71' : '';
+            }
         }
         if (btnGear) {
             btnGear.classList.toggle('active', !gearUp);
