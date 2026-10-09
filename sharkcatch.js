@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 export class SharkCatchSystem {
@@ -51,7 +52,12 @@ export class SharkCatchSystem {
     }
 
     initModel() {
-        const loader = new GLTFLoader(this.loadingManager || undefined);
+        const manager = this.loadingManager || undefined;
+        const loader = new GLTFLoader(manager);
+
+        const dracoLoader = new DRACOLoader(manager);
+        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+        loader.setDRACOLoader(dracoLoader);
         loader.setMeshoptDecoder(MeshoptDecoder);
 
         loader.load(

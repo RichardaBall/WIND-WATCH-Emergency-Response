@@ -5,8 +5,9 @@ export class SearchLightSystem {
         this.helicopterModel = helicopterModel;
         this.scene = scene;
 
-        // Narrow beam angle (Math.PI / 36) and sharp penumbra (0.1) for a cylinder-like searchlight beam
-        this.spotLight = new THREE.SpotLight(0xffffee, 0.0, 180.0, Math.PI / 36, 0.1, 1.0);
+        // Narrow beam angle (Math.PI / 36) and sharp penumbra (0.1) for a focused searchlight beam
+        // Increased max light distance to 500.0 to guarantee sea-level illumination from hover altitude
+        this.spotLight = new THREE.SpotLight(0xffffee, 0.0, 500.0, Math.PI / 36, 0.1, 1.0);
         this.spotLight.position.set(0.0, -0.9, 0.8); 
         this.helicopterModel.add(this.spotLight);
 
@@ -14,6 +15,8 @@ export class SearchLightSystem {
         this.targetObject = new THREE.Object3D();
         this.scene.add(this.targetObject);
         this.spotLight.target = this.targetObject;
+
+        this._tempVector = new THREE.Vector3();
     }
 
     update(delta, player, weatherData, mainBase = null, windFarm = null, liferaftManager = null, rescueMission = null) {
@@ -70,10 +73,36 @@ export class SearchLightSystem {
             return;
         }
 
-        // 3. Gather target objects to illuminate with precise references
+        // 3. Gather target objects to illuminate
         const targets = [];
         
-        // Main base helipad reference (checking helipadCenter, helper method, or model)
+        // Helper to extract world position cleanly
+        const addTargetObj = (obj, name) => {
+            if (!obj) return;
+            const pos = new THREE.Vector3();
+            if (typeof obj.getWorldPosition === 'function') {
+                obj.getWorldPosition(pos);
+            } else if (obj.position instanceof THREE.Vector3) {
+                pos.copy(obj.position);
+            } else {
+                return;
+            }
+            targets.push({ pos: pos, name: name });
+        };
+
+        // Primary: Rescue Mission (Uses dynamic getActiveTargetPosition method & raftMesh)
+        if (rescueMission) {
+            if (typeof rescueMission.getActiveTargetPosition === 'function') {
+                const targetPos = rescueMission.getActiveTargetPosition(new THREE.Vector3());
+                targets.push({ pos: targetPos, name: 'RescueMission_ActiveTarget' });
+            } else if (rescueMission.raftMesh && rescueMission.raftMesh.visible) {
+                addTargetObj(rescueMission.raftMesh, 'RescueMission_RaftMesh');
+            } else if (rescueMission.raftPosition) {
+                targets.push({ pos: rescueMission.raftPosition.clone(), name: 'RescueMission_RaftPos' });
+            }
+        }
+
+        // Main base helipad reference
         if (mainBase) {
             if (mainBase.helipadCenter instanceof THREE.Vector3) {
                 targets.push({ pos: mainBase.helipadCenter.clone().add(new THREE.Vector3(0, 2, 0)), name: 'MainBase_Center' });
@@ -101,21 +130,7 @@ export class SearchLightSystem {
             });
         }
 
-        // Safe helper to extract position from any object format
-        const addTargetObj = (obj, name) => {
-            if (!obj) return;
-            const pos = new THREE.Vector3();
-            if (typeof obj.getWorldPosition === 'function') {
-                obj.getWorldPosition(pos);
-            } else if (obj.position instanceof THREE.Vector3) {
-                pos.copy(obj.position);
-            } else {
-                return;
-            }
-            targets.push({ pos: pos, name: name });
-        };
-
-        // Explicit manager checks
+        // Liferaft Manager fallback
         if (liferaftManager) {
             if (Array.isArray(liferaftManager.rafts)) {
                 liferaftManager.rafts.forEach((raft, idx) => addTargetObj(raft.mesh || raft.group || raft, `Liferaft_${idx}`));
@@ -123,18 +138,10 @@ export class SearchLightSystem {
             if (liferaftManager.raft) addTargetObj(liferaftManager.raft.mesh || liferaftManager.raft, 'Liferaft_Single');
         }
 
-        if (rescueMission) {
-            if (Array.isArray(rescueMission.rafts)) {
-                rescueMission.rafts.forEach((raft, idx) => addTargetObj(raft.mesh || raft.group || raft, `RescueRaft_${idx}`));
-            }
-            if (rescueMission.raft) addTargetObj(rescueMission.raft.mesh || rescueMission.raft, 'RescueRaft_Single');
-            if (rescueMission.target) addTargetObj(rescueMission.target, 'RescueMission_Target');
-        }
-
         // Universal Scene Traversal Fallback
-        if (this.scene) {
+        if (targets.length === 0 && this.scene) {
             this.scene.traverse((child) => {
-                if (child && child.name) {
+                if (child && child.visible && child.name) {
                     const lname = child.name.toLowerCase();
                     if (lname.includes('raft') || lname.includes('survivor') || lname.includes('target') || lname.includes('dinghy')) {
                         const p = new THREE.Vector3();
@@ -148,12 +155,13 @@ export class SearchLightSystem {
             });
         }
 
-        // 4. Adapt activation range for storms (shorten to 80m so it doesn't lock onto fog-obscured targets)
-        const activationRange = isStormy ? 80.0 : 250.0;
+        // 4. Set activation range (350m so searchlight locks on well before getting right over the raft)
+        const activationRange = isStormy ? 200.0 : 350.0;
 
         let nearestTarget = null;
         let minDistance = Infinity;
-        const heliPos = this.helicopterModel.position;
+        const heliPos = new THREE.Vector3();
+        this.helicopterModel.getWorldPosition(heliPos);
 
         for (let i = 0; i < targets.length; i++) {
             const dist = heliPos.distanceTo(targets[i].pos);
@@ -165,9 +173,9 @@ export class SearchLightSystem {
 
         // 5. Lock onto target or turn off if out of range
         if (nearestTarget !== null && minDistance <= activationRange) {
-            // Boost intensity in storms to punch through fog at closer range
-            this.spotLight.intensity = isStormy ? 260.0 : 180.0;
+            this.spotLight.intensity = isStormy ? 300.0 : 220.0;
             this.targetObject.position.copy(nearestTarget);
+            this.targetObject.updateMatrixWorld(true);
         } else {
             this.spotLight.intensity = 0.0;
         }

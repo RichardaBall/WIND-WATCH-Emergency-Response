@@ -17,7 +17,7 @@ export class BuoySystem {
             scale: 1,         // Mesh scale factor
             count: 5,         // Number of buoys
             ndbFrequency: 210,// NDB Radio Navigation Frequency (210 kHz reallocated from Main Base)
-            lightY: 2.6,      // Light source and bulb height offset (meters relative to buoy)
+            lightY: 2.5,      // Light source and bulb height offset (meters relative to buoy)
             lightBrightness: 25.0 // Active light pulse brightness / intensity
         };
 
@@ -26,7 +26,7 @@ export class BuoySystem {
         this.elapsedTime = 0;
 
         // Shared bulb geometry
-        this.bulbGeo = new THREE.SphereGeometry(0.22, 12, 12);
+        this.bulbGeo = new THREE.SphereGeometry(0.11, 12, 12);
 
         // Light sequence parameters (chase effect)
         this.stepDuration = 0.2;

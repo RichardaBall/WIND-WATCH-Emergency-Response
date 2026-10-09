@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { WinchSystem } from './winch.js';
 import { Survivor, SurvivorState } from './survivor.js';
 
@@ -90,8 +91,156 @@ export class RescueMission {
         this.flashingMesh.visible = false;
         this.scene.add(this.flashingMesh);
 
+        // Dedicated searchlight target object
+        this.searchlight = null;
+        this.searchlightTarget = new THREE.Object3D();
+        this.scene.add(this.searchlightTarget);
+        this._targetPos = new THREE.Vector3();
+
         this._initFallbackMesh();
         this._preloadLiferaft();
+    }
+
+    /**
+     * Optional external method to bind a spotlight (e.g. helicopter searchlight)
+     */
+    setSearchlight(spotLight) {
+        this.searchlight = spotLight;
+        if (this.searchlight) {
+            this.searchlight.target = this.searchlightTarget;
+            if (!this.searchlightTarget.parent) {
+                this.scene.add(this.searchlightTarget);
+            }
+        }
+    }
+
+    /**
+     * Resolves the world coordinate of the current active rescue target
+     * (liferaft.glb / liferaft2.glb when waiting, or raising.glb / winch hook when lifted)
+     */
+    getActiveTargetPosition(outVector = new THREE.Vector3()) {
+        // If survivor is attached and winching, track the raised survivor / winch hook position
+        if (this.survivorAttached) {
+            if (this.survivor && typeof this.survivor.getActivePosition === 'function') {
+                return this.survivor.getActivePosition(outVector);
+            }
+            if (this.survivor && this.survivor.raisingMesh && this.survivor.raisingMesh.visible) {
+                this.survivor.raisingMesh.getWorldPosition(outVector);
+                return outVector;
+            }
+            if (this.winchSystem) {
+                const hookPos = this.winchSystem.getHookPosition();
+                if (hookPos) {
+                    outVector.copy(hookPos);
+                    return outVector;
+                }
+            }
+        }
+
+        // If survivor is on raft, illuminate the liferaft and raft survivor center
+        if (this.raftMesh && this.raftMesh.visible) {
+            outVector.copy(this.raftPosition);
+            outVector.y += 0.5; // Target slightly above raft deck level for full illumination beam
+            return outVector;
+        }
+
+        if (this.survivor && typeof this.survivor.getActivePosition === 'function') {
+            return this.survivor.getActivePosition(outVector);
+        }
+
+        outVector.copy(this.raftPosition);
+        return outVector;
+    }
+
+    reset() {
+        if (this.raftMesh) {
+            this._resetRaftVisibility(this.raftMesh);
+            this.raftMesh.visible = false;
+            this.raftMesh = null;
+        }
+        if (this.fallbackMesh) {
+            this.fallbackMesh.visible = false;
+        }
+        this.raftTemplates.forEach(t => { 
+            if (t) {
+                this._resetRaftVisibility(t);
+                t.visible = false; 
+            }
+        });
+        this.state = 'IDLE';
+        this.survivorAttached = false;
+        if (this.flashingLight) this.flashingLight.intensity = 0;
+        if (this.flashingMesh) this.flashingMesh.visible = false;
+        if (this.pagerElement) this.pagerElement.style.display = 'none';
+        this._scheduleInitialMission();
+    }
+
+    _hideRaftSurvivor(raftMesh) {
+        if (!raftMesh) return;
+
+        if (this.raftMixer) {
+            this.raftMixer.stopAllAction();
+        }
+
+        let hiddenAny = false;
+
+        raftMesh.traverse((child) => {
+            if (child.isMesh || child.isSkinnedMesh) {
+                const name = (child.name || '').toLowerCase();
+                const isRaftBody = name.includes('raft') || 
+                                   name.includes('boat') || 
+                                   name.includes('tube') || 
+                                   name.includes('hull') || 
+                                   name.includes('canopy') || 
+                                   name.includes('float') || 
+                                   name.includes('floor') || 
+                                   name.includes('ring') || 
+                                   name.includes('base') ||
+                                   name.includes('cylinder');
+
+                if (!isRaftBody) {
+                    if (
+                        child.isSkinnedMesh || 
+                        name.includes('survivor') || 
+                        name.includes('character') || 
+                        name.includes('person') || 
+                        name.includes('man') || 
+                        name.includes('human') || 
+                        name.includes('guy') || 
+                        name.includes('body') || 
+                        name.includes('people') || 
+                        name.includes('mixamo') || 
+                        name.includes('armature') || 
+                        name.includes('avatar') ||
+                        name.includes('male') ||
+                        name.includes('female') ||
+                        name.includes('figure') ||
+                        name.includes('victim')
+                    ) {
+                        child.visible = false;
+                        hiddenAny = true;
+                    }
+                }
+            }
+        });
+
+        // Fallback: If no mesh matched explicit keywords, hide any SkinnedMesh (character skeleton)
+        if (!hiddenAny) {
+            raftMesh.traverse((child) => {
+                if (child.isSkinnedMesh) {
+                    child.visible = false;
+                }
+            });
+        }
+    }
+
+    _resetRaftVisibility(raftMesh) {
+        if (!raftMesh) return;
+        raftMesh.traverse((child) => {
+            if (child.isMesh || child.isSkinnedMesh) {
+                child.visible = true;
+            }
+        });
     }
 
     /**
@@ -186,6 +335,7 @@ export class RescueMission {
         const dracoLoader = new DRACOLoader(manager);
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
+        loader.setMeshoptDecoder(MeshoptDecoder);
 
         const files = ['liferaft.glb', 'liferaft2.glb'];
         let loadedCount = 0;
@@ -380,6 +530,7 @@ export class RescueMission {
         }
         this.usingFallback = false;
         this.raftMesh = this.raftTemplates[chosenOriginalIndex];
+        this._resetRaftVisibility(this.raftMesh);
 
         const raftYOffsets = [-1.90, -1.95];
         const raftYOffset = raftYOffsets[chosenOriginalIndex] !== undefined ? raftYOffsets[chosenOriginalIndex] : -2.20;
@@ -432,6 +583,22 @@ export class RescueMission {
 
         if (this.survivor) {
             this.survivor.update(delta, hookPos);
+        }
+
+        // Searchlight target tracking across rescue mission states
+        const activeSpotlight = this.searchlight || (helicopterPlayer ? (helicopterPlayer.searchlight || helicopterPlayer.spotlight) : null);
+        if (activeSpotlight && (this.state === 'ACTIVE' || this.state === 'ON_SCENE' || this.state === 'WINCHING' || this.state === 'RETURNING')) {
+            // Ensure searchlight range and intensity reach ocean floor from helicopter hover height
+            if (activeSpotlight.distance < 300) activeSpotlight.distance = 350;
+            
+            // Re-bind target object if unassigned
+            if (activeSpotlight.target !== this.searchlightTarget) {
+                activeSpotlight.target = this.searchlightTarget;
+            }
+
+            this.getActiveTargetPosition(this._targetPos);
+            this.searchlightTarget.position.copy(this._targetPos);
+            this.searchlightTarget.updateMatrixWorld();
         }
 
         if (this.state === 'IDLE') {
@@ -530,16 +697,15 @@ export class RescueMission {
                 if (this.statusDisplay) {
                     this.statusDisplay.textContent = `HOOKED! RETRACT WINCH`;
                 }
-                if (this.raftMesh) {
-                    this.raftMesh.visible = false;
-                    this.raftMesh = null;
-                }
                 if (this.flashingLight) {
                     this.flashingLight.intensity = 0;
                 }
                 if (this.flashingMesh) {
                     this.flashingMesh.visible = false;
                 }
+                // Hide the survivor sitting on the liferaft at the exact moment the winched survivor appears
+                this._hideRaftSurvivor(this.raftMesh);
+
                 if (this.survivor) {
                     this.survivor.attachToWinch();
                 }
@@ -601,6 +767,11 @@ export class RescueMission {
             if (isLanded && allSystemsOff) {
                 this.state = 'DISEMBARKING';
 
+                if (this.raftMesh) {
+                    this.raftMesh.visible = false;
+                    this.raftMesh = null;
+                }
+
                 if (this.survivor) {
                     this.survivor.disembarkNextToHelicopter(
                         { x: -14.00, y: 4.80, z: 3.35, rotationY: 1.5533 },
@@ -614,6 +785,11 @@ export class RescueMission {
 
         if (this.state === 'DISEMBARKING' && this.survivor && this.survivor.currentState === SurvivorState.COMPLETED) {
             this.state = 'RESPAWN_WAIT';
+
+            if (this.raftMesh) {
+                this.raftMesh.visible = false;
+                this.raftMesh = null;
+            }
 
             if (this.pagerElement) {
                 this.pagerElement.style.display = 'none';

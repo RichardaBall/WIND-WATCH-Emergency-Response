@@ -2,10 +2,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+
+const FALLBACK_CAMERA = new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
 
 function optimizeAndWarmUpGltf(gltfScene, renderer = null, mixer = null) {
     const activeRenderer = renderer || window.renderer || null;
-    const activeCamera = window.camera || new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+    const activeCamera = window.camera || FALLBACK_CAMERA;
 
     const prevVisible = gltfScene.visible;
     gltfScene.visible = true;
@@ -66,18 +69,9 @@ export class Survivor {
         this.loadingManager = loadingManager;
         this.renderer = renderer;
         
-        this.meshes = {
-            raising: null,
-            wavingbye: null
-        };
-        this.mixers = {
-            raising: null,
-            wavingbye: null
-        };
-        this.actions = {
-            raising: null,
-            wavingbye: null
-        };
+        this.meshes = { raising: null, wavingbye: null };
+        this.mixers = { raising: null, wavingbye: null };
+        this.actions = { raising: null, wavingbye: null };
 
         this.activeKey = null;
         this.mesh = null;
@@ -89,6 +83,7 @@ export class Survivor {
         this.fadeDuration = 2.5;   
         this.fadeTimer = 0;
         this.isFading = false;
+        this.fadeTimeout = null;
         this.handOffset = 0.55 * 1.25;    
 
         this.raftPosition = null;
@@ -99,68 +94,59 @@ export class Survivor {
         this.pendingAutoFade = true;
     }
 
-    async loadModels(files = null, renderer = null) {
-        const manager = (this.loadingManager && typeof this.loadingManager.itemStart === 'function') 
-            ? this.loadingManager 
-            : THREE.DefaultLoadingManager;
-
-        const loader = new GLTFLoader(manager);
-
-        const dracoLoader = new DRACOLoader(manager);
-        dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
-        loader.setDRACOLoader(dracoLoader);
-
-        const ktx2Loader = new KTX2Loader(manager);
-        ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
-        const activeRenderer = renderer || this.renderer || window.renderer;
-        if (activeRenderer) {
-            ktx2Loader.detectSupport(activeRenderer);
+    clearFadeTimeout() {
+        if (this.fadeTimeout) {
+            clearTimeout(this.fadeTimeout);
+            this.fadeTimeout = null;
         }
-        loader.setKTX2Loader(ktx2Loader);
+    }
+
+    async loadModels(files = null, renderer = null) {
+        const activeRenderer = renderer || this.renderer || window.renderer;
 
         const tryPathsForModel = (filename) => {
+            // Check root directory candidate paths first to eliminate 404 console noise
             const candidates = [
                 filename,
+                `./${filename}`,
                 `assets/character/${filename}`,
                 `assets/${filename}`,
                 `./assets/character/${filename}`,
-                `./assets/${filename}`,
-                `./${filename}`
+                `./assets/${filename}`
             ];
 
             return new Promise((resolve) => {
                 let attemptIndex = 0;
 
+                const standaloneLoader = new GLTFLoader();
+                const dracoLoader = new DRACOLoader();
+                dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+                standaloneLoader.setDRACOLoader(dracoLoader);
+                standaloneLoader.setMeshoptDecoder(MeshoptDecoder);
+
+                if (activeRenderer) {
+                    const ktx2Loader = new KTX2Loader();
+                    ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
+                    ktx2Loader.detectSupport(activeRenderer);
+                    standaloneLoader.setKTX2Loader(ktx2Loader);
+                }
+
                 const attemptNext = () => {
                     if (attemptIndex >= candidates.length) {
-                        console.error(`[Survivor] All candidate paths failed for model '${filename}'.`);
+                        console.warn(`[Survivor] All candidate paths failed for model '${filename}'. Using fallback geometry.`);
                         resolve(null);
                         return;
                     }
 
-                    const currentPath = candidates[attemptIndex];
-                    attemptIndex++;
-
-                    if (manager && typeof manager.itemStart === 'function') {
-                        manager.itemStart(currentPath);
-                    }
-
-                    loader.load(
+                    const currentPath = candidates[attemptIndex++];
+                    standaloneLoader.load(
                         currentPath,
                         (gltf) => {
-                            console.log(`[Survivor] Successfully loaded character model from: ${currentPath}`);
-                            if (manager && typeof manager.itemEnd === 'function') {
-                                manager.itemEnd(currentPath);
-                            }
+                            console.log(`[Survivor] Successfully loaded model from: ${currentPath}`);
                             resolve(gltf);
                         },
                         undefined,
-                        (err) => {
-                            if (manager && typeof manager.itemEnd === 'function') {
-                                manager.itemEnd(currentPath);
-                            }
-                            attemptNext();
-                        }
+                        () => attemptNext()
                     );
                 };
 
@@ -306,6 +292,7 @@ export class Survivor {
     }
 
     spawnOnRaft(raftPosition, raftRotationY = 0) {
+        this.clearFadeTimeout();
         this.raftPosition = raftPosition.clone();
         this.raftRotationY = raftRotationY;
         this.currentState = SurvivorState.ON_RAFT;
@@ -323,6 +310,7 @@ export class Survivor {
     }
 
     attachToWinch() {
+        this.clearFadeTimeout();
         this.currentState = SurvivorState.WINCHING;
         this.isFading = false;
         this.fadeTimer = 0;
@@ -335,6 +323,7 @@ export class Survivor {
     }
 
     enterCabin() {
+        this.clearFadeTimeout();
         this.currentState = SurvivorState.IN_CABIN;
         Object.values(this.meshes).forEach(m => {
             if (m) m.visible = false;
@@ -342,6 +331,7 @@ export class Survivor {
     }
 
     disembarkNextToHelicopter(posOrHeliPos = { x: 5.869, y: 6.236, z: 1.4548 }, helicopterRotationY = 0, deckY = null, autoFade = true) {
+        this.clearFadeTimeout();
         this.currentState = SurvivorState.DISEMBARKING;
         this.pendingDisembarkPos = posOrHeliPos;
         this.pendingHeliRotY = helicopterRotationY;
@@ -388,7 +378,7 @@ export class Survivor {
         this.currentState = SurvivorState.WAVING;
 
         if (autoFade) {
-            setTimeout(() => {
+            this.fadeTimeout = setTimeout(() => {
                 if (this.currentState === SurvivorState.WAVING) {
                     this.isFading = true;
                     this.fadeTimer = 0;
