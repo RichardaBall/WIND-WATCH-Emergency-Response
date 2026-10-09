@@ -126,18 +126,19 @@ export class SirenSystem {
     }
 
     update(delta, windFarm) {
-        // Check window.missionManager, rescueMission state, windfarm fire index, or visible pager panels
-        const missionMgrActive = window.missionManager && window.missionManager.activeMissionType !== null;
-        const rescueActive = window.rescueMission && ['ACTIVE', 'ON_SCENE', 'WINCHING', 'RETURNING'].includes(window.rescueMission.state);
-        const wtgFireActive = windFarm && windFarm.activeFireIndex !== -1;
+        // Check all potential pager UI elements across different rescue missions and classes
+        const rescuePager = document.getElementById('rescue-pager-panel');
+        const fishermanPager = document.getElementById('fisherman-pager-panel');
         
-        const pagerPanel = document.getElementById('rescue-pager-panel');
-        const pagerVisible = pagerPanel && window.getComputedStyle(pagerPanel).display !== 'none';
+        const rescueVisible = rescuePager && window.getComputedStyle(rescuePager).display === 'block';
+        const fishermanVisible = fishermanPager && window.getComputedStyle(fishermanPager).display === 'block';
+        const pagerClassVisible = window.pager ? window.pager.isVisible : false;
 
-        const emergencyActive = missionMgrActive || rescueActive || wtgFireActive || pagerVisible;
+        // Siren activates ONLY if at least one pager panel is visible on screen
+        const pagerActiveOnScreen = rescueVisible || fishermanVisible || pagerClassVisible;
 
         this.sirens.forEach(siren => {
-            if (emergencyActive) {
+            if (pagerActiveOnScreen) {
                 if (siren.mechanism) {
                     siren.mechanism.rotation.y += delta * 12.0;
                 }

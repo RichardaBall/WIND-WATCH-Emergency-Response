@@ -7,6 +7,13 @@ export class Pager {
         this.callTypeEl = null;
         this.ledEl = null;
         this.createElement();
+
+        // Expose globally for other systems
+        window.pager = this;
+    }
+
+    get isVisible() {
+        return this.container && this.container.style.display === 'block';
     }
 
     createElement() {
