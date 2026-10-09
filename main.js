@@ -24,12 +24,15 @@ import { BuoySystem } from './buoy.js';
 import { Shark } from './shark.js';
 import { SharkCatchSystem } from './sharkcatch.js';
 import { AssetWarmupSystem } from './assetWarmup.js';
+import { MissionManager } from './missionManager.js';
+import { Pager } from './pager.js';
 
 const { scene, camera, renderer, water, sunLight, ambientLight } = setupScene();
 const weatherSystem = new WeatherSystem();
 const soundManager = new SoundManager();
 const inputManager = new InputManager(soundManager);
 const kneeboard = new Kneeboard();
+const pager = new Pager();
 const waterSystem = new WaterSystem(scene);
 const rotorWashSystem = new RotorWashSystem(scene);
 const helipadDebrisSystem = new HelipadDebrisSystem(scene);
@@ -48,6 +51,7 @@ let searchLightSystem = null;
 let buoySystem = null;
 let shark = null;
 let sharkCatchSystem = null;
+let missionManager = null;
 let loadingMusic = null;
 
 const clock = new THREE.Clock();
@@ -323,8 +327,8 @@ loader.setDRACOLoader(dracoLoader);
 
 function initializeGameAssets() {
     liferaftManager = new LiferaftManager(scene, loadingManager);
-    rescueMission = new RescueMission(scene, loadingManager);
-    windFarm = new WindFarm(scene, loadingManager);
+    rescueMission = new RescueMission(scene, loadingManager, pager);
+    windFarm = new WindFarm(scene, loadingManager, pager);
     buoySystem = new BuoySystem(scene, loadingManager);
 
     shark = new Shark(scene, loadingManager);
@@ -416,6 +420,9 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
 
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
 
+    // Initialize Mission Manager centrally controlling windfarm & rescue missions with pager
+    missionManager = new MissionManager(scene, rescueMission, windFarm, navRadio, pager);
+
     developerTool = new DeveloperTool(
         weatherSystem, 
         windFarm, 
@@ -455,6 +462,12 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
             soundManager.stopHelicopterEngine();
             soundManager.playSplashSound();
         }
+
+        // Trigger mission manager crash handling (clears active mission, hides pager, starts 30s cooldown)
+        if (missionManager) {
+            missionManager.handleCrash();
+        }
+
         if (liferaftManager) {
             liferaftManager.showRestart(() => {
                 respawnGame();
@@ -558,8 +571,9 @@ function animate() {
         liferaftManager.update(delta);
     }
 
-    if (rescueMission && helicopterPlayer) {
-        rescueMission.update(delta, helicopterPlayer, mainBase);
+    // Central Mission Manager update replacing independent task ticks
+    if (missionManager && helicopterPlayer) {
+        missionManager.update(delta, helicopterPlayer, mainBase);
     }
 
     if (searchLightSystem && helicopterPlayer) {

@@ -85,6 +85,17 @@ export class LiferaftManager {
     deploy(crashPosition) {
         if (this.isDeployed) return;
         this.isDeployed = true;
+
+        // Clear active mission state and hide the pager on crash
+        if (window.missionManager) {
+            window.missionManager.activeMission = null;
+        }
+        const pagerElement = document.getElementById('pager');
+        if (pagerElement) {
+            pagerElement.classList.remove('active');
+            pagerElement.innerHTML = '';
+        }
+
         this.showRestart();
     }
 

@@ -91,7 +91,6 @@ export class RescueMission {
         this.flashingMesh.visible = false;
         this.scene.add(this.flashingMesh);
 
-        // Dedicated searchlight target object
         this.searchlight = null;
         this.searchlightTarget = new THREE.Object3D();
         this.scene.add(this.searchlightTarget);
@@ -101,9 +100,6 @@ export class RescueMission {
         this._preloadLiferaft();
     }
 
-    /**
-     * Optional external method to bind a spotlight (e.g. helicopter searchlight)
-     */
     setSearchlight(spotLight) {
         this.searchlight = spotLight;
         if (this.searchlight) {
@@ -114,12 +110,7 @@ export class RescueMission {
         }
     }
 
-    /**
-     * Resolves the world coordinate of the current active rescue target
-     * (liferaft.glb / liferaft2.glb when waiting, or raising.glb / winch hook when lifted)
-     */
     getActiveTargetPosition(outVector = new THREE.Vector3()) {
-        // If survivor is attached and winching, track the raised survivor / winch hook position
         if (this.survivorAttached) {
             if (this.survivor && typeof this.survivor.getActivePosition === 'function') {
                 return this.survivor.getActivePosition(outVector);
@@ -137,10 +128,9 @@ export class RescueMission {
             }
         }
 
-        // If survivor is on raft, illuminate the liferaft and raft survivor center
         if (this.raftMesh && this.raftMesh.visible) {
             outVector.copy(this.raftPosition);
-            outVector.y += 0.5; // Target slightly above raft deck level for full illumination beam
+            outVector.y += 0.5;
             return outVector;
         }
 
@@ -172,59 +162,26 @@ export class RescueMission {
         if (this.flashingLight) this.flashingLight.intensity = 0;
         if (this.flashingMesh) this.flashingMesh.visible = false;
         if (this.pagerElement) this.pagerElement.style.display = 'none';
-        this._scheduleInitialMission();
     }
 
     _hideRaftSurvivor(raftMesh) {
         if (!raftMesh) return;
-
         if (this.raftMixer) {
             this.raftMixer.stopAllAction();
         }
-
         let hiddenAny = false;
-
         raftMesh.traverse((child) => {
             if (child.isMesh || child.isSkinnedMesh) {
                 const name = (child.name || '').toLowerCase();
-                const isRaftBody = name.includes('raft') || 
-                                   name.includes('boat') || 
-                                   name.includes('tube') || 
-                                   name.includes('hull') || 
-                                   name.includes('canopy') || 
-                                   name.includes('float') || 
-                                   name.includes('floor') || 
-                                   name.includes('ring') || 
-                                   name.includes('base') ||
-                                   name.includes('cylinder');
-
+                const isRaftBody = name.includes('raft') || name.includes('boat') || name.includes('tube') || name.includes('hull') || name.includes('canopy') || name.includes('float') || name.includes('floor') || name.includes('ring') || name.includes('base') || name.includes('cylinder');
                 if (!isRaftBody) {
-                    if (
-                        child.isSkinnedMesh || 
-                        name.includes('survivor') || 
-                        name.includes('character') || 
-                        name.includes('person') || 
-                        name.includes('man') || 
-                        name.includes('human') || 
-                        name.includes('guy') || 
-                        name.includes('body') || 
-                        name.includes('people') || 
-                        name.includes('mixamo') || 
-                        name.includes('armature') || 
-                        name.includes('avatar') ||
-                        name.includes('male') ||
-                        name.includes('female') ||
-                        name.includes('figure') ||
-                        name.includes('victim')
-                    ) {
+                    if (child.isSkinnedMesh || name.includes('survivor') || name.includes('character') || name.includes('person') || name.includes('man') || name.includes('human') || name.includes('guy') || name.includes('body') || name.includes('people') || name.includes('mixamo') || name.includes('armature') || name.includes('avatar') || name.includes('male') || name.includes('female') || name.includes('figure') || name.includes('victim')) {
                         child.visible = false;
                         hiddenAny = true;
                     }
                 }
             }
         });
-
-        // Fallback: If no mesh matched explicit keywords, hide any SkinnedMesh (character skeleton)
         if (!hiddenAny) {
             raftMesh.traverse((child) => {
                 if (child.isSkinnedMesh) {
@@ -243,32 +200,18 @@ export class RescueMission {
         });
     }
 
-    /**
-     * Executes a pre-spawning WebGL compile pass on all liferafts, survivors, lights,
-     * and fallback geometries to eliminate runtime spawn lag.
-     */
     warmup(renderer, camera) {
         if (!renderer || !camera) return;
-
         const hiddenObjects = [];
         const culledObjects = [];
-
-        const targets = [
-            this.fallbackMesh,
-            this.flashingMesh
-        ];
-
-        this.raftTemplates.forEach((template) => {
-            if (template) targets.push(template);
-        });
-
+        const targets = [this.fallbackMesh, this.flashingMesh];
+        this.raftTemplates.forEach((template) => { if (template) targets.push(template); });
         if (this.survivor) {
             if (this.survivor.mesh) targets.push(this.survivor.mesh);
             if (this.survivor.raisingMesh) targets.push(this.survivor.raisingMesh);
             if (this.survivor.walkingMesh) targets.push(this.survivor.walkingMesh);
             if (this.survivor.wavingMesh) targets.push(this.survivor.wavingMesh);
         }
-
         targets.forEach((obj) => {
             if (!obj) return;
             obj.traverse((child) => {
@@ -282,32 +225,18 @@ export class RescueMission {
                         culledObjects.push(child);
                     }
                     child.updateMatrixWorld(true);
-                    if (child.isSkinnedMesh && child.skeleton) {
-                        child.skeleton.update();
-                    }
+                    if (child.isSkinnedMesh && child.skeleton) child.skeleton.update();
                     if (child.material) {
                         const mats = Array.isArray(child.material) ? child.material : [child.material];
-                        mats.forEach((m) => {
-                            m.needsUpdate = true;
-                        });
+                        mats.forEach((m) => { m.needsUpdate = true; });
                     }
                 }
             });
         });
-
-        // Prime animation mixers
-        this.raftMixers.forEach((mixer) => {
-            if (mixer) mixer.update(0.01);
-        });
-        if (this.survivor && this.survivor.mixer) {
-            this.survivor.mixer.update(0.01);
-        }
-
-        // Perform GPU shader compilation and offscreen render pass
+        this.raftMixers.forEach((mixer) => { if (mixer) mixer.update(0.01); });
+        if (this.survivor && this.survivor.mixer) this.survivor.mixer.update(0.01);
         renderer.compile(this.scene, camera);
         renderer.render(this.scene, camera);
-
-        // Restore original hidden and frustum-culled states
         hiddenObjects.forEach((child) => { child.visible = false; });
         culledObjects.forEach((child) => { child.frustumCulled = true; });
     }
@@ -327,11 +256,8 @@ export class RescueMission {
         this.raftMixers = [];
         this.raftAnimationsList = [];
 
-        const manager = (this.loadingManager && typeof this.loadingManager.itemStart === 'function') 
-            ? this.loadingManager 
-            : THREE.DefaultLoadingManager;
+        const manager = (this.loadingManager && typeof this.loadingManager.itemStart === 'function') ? this.loadingManager : THREE.DefaultLoadingManager;
         const loader = new GLTFLoader(manager);
-        
         const dracoLoader = new DRACOLoader(manager);
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
@@ -341,10 +267,7 @@ export class RescueMission {
         let loadedCount = 0;
 
         files.forEach((file, index) => {
-            if (manager && typeof manager.itemStart === 'function') {
-                manager.itemStart(file);
-            }
-
+            if (manager && typeof manager.itemStart === 'function') manager.itemStart(file);
             loader.load(file, (gltf) => {
                 optimizeAndWarmUpGltf(gltf.scene);
                 const template = gltf.scene;
@@ -364,33 +287,13 @@ export class RescueMission {
                 this.raftMixers[index] = mixer;
                 this.raftAnimationsList[index] = gltf.animations;
 
-                if (manager && typeof manager.itemEnd === 'function') {
-                    manager.itemEnd(file);
-                }
-
+                if (manager && typeof manager.itemEnd === 'function') manager.itemEnd(file);
                 loadedCount++;
-                if (loadedCount === files.length) {
-                    this.isRaftLoading = false;
-                    this._scheduleInitialMission();
-                }
-            }, undefined, (err) => {
-                console.warn(`Failed to preload ${file}:`, err);
-                if (manager && typeof manager.itemEnd === 'function') {
-                    manager.itemEnd(file);
-                }
+            }, undefined, () => {
+                if (manager && typeof manager.itemEnd === 'function') manager.itemEnd(file);
                 loadedCount++;
-                if (loadedCount === files.length) {
-                    this.isRaftLoading = false;
-                    this._scheduleInitialMission();
-                }
             });
         });
-    }
-
-    _scheduleInitialMission() {
-        if (this.state !== 'IDLE') return;
-        this.missionTimer = 5.0 + Math.random() * 5.0;
-        this.isWaitingForMission = true;
     }
 
     _initUI() {
@@ -421,15 +324,15 @@ export class RescueMission {
             <div style="position: absolute; bottom: 4px; right: 6px; font-size: 7px; color: #555; font-weight: bold;">⊗</div>
 
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 2px;">
-                <div style="font-size: 8px; font-weight: bold; color: #ff3333; letter-spacing: 1px;">PAGER [SOS]</div>
+                <div style="font-size: 8px; font-weight: bold; color: #ff3333; letter-spacing: 1px;" id="pager-title">PAGER [SOS]</div>
                 <div style="display: flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 7px; color: #888;">SOS</span>
+                    <span style="font-size: 7px; color: #888;">ALERT</span>
                     <div id="pager-led" style="width: 7px; height: 7px; background-color: #ff3333; border-radius: 50%; box-shadow: 0 0 5px #ff3333; border: 1px solid #500;"></div>
                 </div>
             </div>
 
             <div style="background: #111215; border: 1px inset #2a2d32; border-radius: 3px; padding: 8px; text-align: center;">
-                <div style="font-size: 7px; color: #9ca3af; letter-spacing: 0.5px; margin-bottom: 2px;">DISTRESS CALL</div>
+                <div style="font-size: 7px; color: #9ca3af; letter-spacing: 0.5px; margin-bottom: 2px;" id="pager-call-type">DISTRESS CALL</div>
                 <div id="pager-freq" style="font-size: 15px; font-weight: bold; color: #ff3333; text-shadow: 0 0 6px rgba(255,51,51,0.6); letter-spacing: 1px;">---.- kHz</div>
             </div>
 
@@ -453,6 +356,7 @@ export class RescueMission {
         this.survivorAttached = false;
         this.usingFallback = false;
         
+        // Ensure rescue mission frequencies do not conflict with fixed base (210) or WTGs (240, 290, 350)
         const excluded = [210, 240, 290, 350];
         const possible = [];
         for (let f = 200; f <= 400; f += 10) {
@@ -478,6 +382,10 @@ export class RescueMission {
         }
 
         if (this.pagerElement && this.freqDisplay && this.statusDisplay) {
+            const titleEl = this.pagerElement.querySelector('#pager-title');
+            const callTypeEl = this.pagerElement.querySelector('#pager-call-type');
+            if (titleEl) titleEl.textContent = 'PAGER [SOS]';
+            if (callTypeEl) callTypeEl.textContent = 'DISTRESS CALL';
             this.freqDisplay.textContent = `${this.rescueFreq.toFixed(1)} kHz`;
             this.statusDisplay.textContent = `NAV TO RAFT`;
             this.pagerElement.style.display = 'block';
@@ -487,10 +395,7 @@ export class RescueMission {
 
         if (this.survivor) {
             const hiddenSurvivorPos = new THREE.Vector3(this.raftPosition.x, -3.0, this.raftPosition.z);
-            this.survivor.spawnOnRaft(
-                hiddenSurvivorPos, 
-                Math.random() * Math.PI * 2
-            );
+            this.survivor.spawnOnRaft(hiddenSurvivorPos, Math.random() * Math.PI * 2);
         }
     }
 
@@ -506,37 +411,15 @@ export class RescueMission {
             this.raftMesh.position.copy(this.raftPosition);
             this.raftMesh.position.y = -1.2;
             this.raftMesh.visible = true;
-
-            const lightY = this.raftPosition.y + 3.9 - 1.2;
-            if (this.flashingLight) this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
-            if (this.flashingMesh) this.flashingMesh.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
             return;
         }
 
-        let chosenOriginalIndex;
-        if (this.currentRaftIndex === null) {
-            const randomPos = Math.floor(Math.random() * validIndices.length);
-            chosenOriginalIndex = validIndices[randomPos];
-            this.currentRaftIndex = validIndices.indexOf(chosenOriginalIndex);
-        } else if (!isUpgrade) {
-            this.currentRaftIndex = (this.currentRaftIndex + 1) % validIndices.length;
-            chosenOriginalIndex = validIndices[this.currentRaftIndex];
-        } else {
-            chosenOriginalIndex = validIndices[this.currentRaftIndex];
-        }
-
-        if (this.fallbackMesh) {
-            this.fallbackMesh.visible = false;
-        }
-        this.usingFallback = false;
+        let chosenOriginalIndex = validIndices[Math.floor(Math.random() * validIndices.length)];
         this.raftMesh = this.raftTemplates[chosenOriginalIndex];
         this._resetRaftVisibility(this.raftMesh);
 
-        const raftYOffsets = [-1.90, -1.95];
-        const raftYOffset = raftYOffsets[chosenOriginalIndex] !== undefined ? raftYOffsets[chosenOriginalIndex] : -2.20;
-
         this.raftMesh.position.copy(this.raftPosition);
-        this.raftMesh.position.y = raftYOffset;
+        this.raftMesh.position.y = -1.90;
         this.raftMesh.visible = true;
 
         this.raftMixer = this.raftMixers[chosenOriginalIndex];
@@ -546,21 +429,13 @@ export class RescueMission {
             action.reset().play();
         }
 
-        const lightHeights = [3.9, 2.1];
-        const heightOffset = lightHeights[chosenOriginalIndex] !== undefined ? lightHeights[chosenOriginalIndex] : 3.9;
-
-        const lightY = this.raftPosition.y + raftYOffset + heightOffset;
-        if (this.flashingLight) {
-            this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
-        }
-        if (this.flashingMesh) {
-            this.flashingMesh.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
-        }
+        const lightY = this.raftPosition.y + 2.0;
+        if (this.flashingLight) this.flashingLight.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
+        if (this.flashingMesh) this.flashingMesh.position.set(this.raftPosition.x, lightY, this.raftPosition.z);
     }
 
     toggleWinch(helicopterPlayer) {
         this.winchSystem.toggleWinch(helicopterPlayer);
-        
         if (this.winchSystem.winchState === 'DOWN' && this.statusDisplay && this.state !== 'IDLE' && this.state !== 'COMPLETED' && this.state !== 'RESPAWN_WAIT') {
             this.statusDisplay.textContent = `HOOK DOWN. HOVER`;
         }
@@ -585,31 +460,18 @@ export class RescueMission {
             this.survivor.update(delta, hookPos);
         }
 
-        // Searchlight target tracking across rescue mission states
         const activeSpotlight = this.searchlight || (helicopterPlayer ? (helicopterPlayer.searchlight || helicopterPlayer.spotlight) : null);
         if (activeSpotlight && (this.state === 'ACTIVE' || this.state === 'ON_SCENE' || this.state === 'WINCHING' || this.state === 'RETURNING')) {
-            // Ensure searchlight range and intensity reach ocean floor from helicopter hover height
             if (activeSpotlight.distance < 300) activeSpotlight.distance = 350;
-            
-            // Re-bind target object if unassigned
             if (activeSpotlight.target !== this.searchlightTarget) {
                 activeSpotlight.target = this.searchlightTarget;
             }
-
             this.getActiveTargetPosition(this._targetPos);
             this.searchlightTarget.position.copy(this._targetPos);
             this.searchlightTarget.updateMatrixWorld();
         }
 
-        if (this.state === 'IDLE') {
-            if (this.isWaitingForMission) {
-                this.missionTimer -= delta;
-                if (this.missionTimer <= 0) {
-                    this.isWaitingForMission = false;
-                    this.startMission();
-                }
-            }
-
+        if (this.state === 'IDLE' || this.state === 'RESPAWN_WAIT' || this.state === 'COMPLETED') {
             if (this.pagerElement) {
                 const led = this.pagerElement.querySelector('#pager-led');
                 if (led) {
@@ -620,52 +482,18 @@ export class RescueMission {
             return;
         }
 
-        if (this.state === 'RESPAWN_WAIT') {
-            this.missionTimer -= delta;
-            if (this.missionTimer <= 0) {
-                this.state = 'IDLE';
-                this._scheduleInitialMission();
-            }
-            if (this.pagerElement) {
-                const led = this.pagerElement.querySelector('#pager-led');
-                if (led) {
-                    led.style.backgroundColor = '#550000';
-                    led.style.boxShadow = 'none';
-                }
-            }
-            return;
-        }
-
-        if (this.state === 'COMPLETED') {
-            if (this.pagerElement) {
-                const led = this.pagerElement.querySelector('#pager-led');
-                if (led) {
-                    led.style.backgroundColor = '#550000';
-                    led.style.boxShadow = 'none';
-                }
-            }
-            return;
-        }
-        
         this.flashTimer += delta * 7;
         const flash = Math.sin(this.flashTimer) > 0 ? 1 : 0;
 
         if (!this.survivorAttached) {
-            if (this.flashingLight) {
-                this.flashingLight.intensity = flash ? 10.0 : 0.5;
-            }
+            if (this.flashingLight) this.flashingLight.intensity = flash ? 10.0 : 0.5;
             if (this.flashingMesh && this.flashingMat) {
                 this.flashingMesh.visible = true;
                 this.flashingMat.emissive.setHex(flash ? 0xff3300 : 0x330f00);
-                this.flashingMat.emissiveIntensity = flash ? 6.0 : 0.5;
             }
         } else {
-            if (this.flashingLight) {
-                this.flashingLight.intensity = 0;
-            }
-            if (this.flashingMesh) {
-                this.flashingMesh.visible = false;
-            }
+            if (this.flashingLight) this.flashingLight.intensity = 0;
+            if (this.flashingMesh) this.flashingMesh.visible = false;
         }
 
         if (this.pagerElement && this.pagerElement.style.display === 'block') {
@@ -697,13 +525,8 @@ export class RescueMission {
                 if (this.statusDisplay) {
                     this.statusDisplay.textContent = `HOOKED! RETRACT WINCH`;
                 }
-                if (this.flashingLight) {
-                    this.flashingLight.intensity = 0;
-                }
-                if (this.flashingMesh) {
-                    this.flashingMesh.visible = false;
-                }
-                // Hide the survivor sitting on the liferaft at the exact moment the winched survivor appears
+                if (this.flashingLight) this.flashingLight.intensity = 0;
+                if (this.flashingMesh) this.flashingMesh.visible = false;
                 this._hideRaftSurvivor(this.raftMesh);
 
                 if (this.survivor) {
@@ -713,23 +536,18 @@ export class RescueMission {
         }
         
         if (this.survivorAttached && this.state === 'WINCHING') {
-            const winchRetracted = this.winchSystem.winchHeight <= 0.15 || 
-                                   this.winchSystem.winchState === 'UP' || 
-                                   this.winchSystem.winchState === 'RETRACTED';
+            const winchRetracted = this.winchSystem.winchHeight <= 0.15 || this.winchSystem.winchState === 'UP' || this.winchSystem.winchState === 'RETRACTED';
             if (winchRetracted) {
                 this.state = 'RETURNING';
                 if (this.statusDisplay) {
                     this.statusDisplay.textContent = `SURVIVOR ONBOARD! RETURN BASE`;
                 }
-
                 if (this.pagerElement) {
                     this.pagerElement.style.display = 'none';
                 }
-
                 if (this.survivor) {
                     this.survivor.enterCabin();
                 }
-                
                 if (window.navRadio && window.navRadio.stations[this.rescueFreq]) {
                     delete window.navRadio.stations[this.rescueFreq];
                 }
@@ -737,72 +555,30 @@ export class RescueMission {
         }
 
         if (this.state === 'RETURNING' && helicopterPlayer && helicopterPlayer.model) {
-            const spawnPos = (this.mainBase && typeof this.mainBase.getSpawnPosition === 'function') 
-                ? this.mainBase.getSpawnPosition() 
-                : new THREE.Vector3(3.3690, 6.2360, 0.4548);
+            const spawnPos = (this.mainBase && typeof this.mainBase.getSpawnPosition === 'function') ? this.mainBase.getSpawnPosition() : new THREE.Vector3(3.3690, 6.2360, 0.4548);
             const horizDist = Math.hypot(heliPos.x - spawnPos.x, heliPos.z - spawnPos.z);
             const vertDist = Math.abs(heliPos.y - spawnPos.y);
 
-            const isLanded = (horizDist < 35.0 && vertDist < 5.0) && 
-                             (helicopterPlayer.isGrounded || Math.abs(helicopterPlayer.currentMoveSpeed || 0) < 1.0 || (helicopterPlayer.verticalSpeed !== undefined && Math.abs(helicopterPlayer.verticalSpeed) < 0.5));
+            const isLanded = (horizDist < 35.0 && vertDist < 5.0) && (helicopterPlayer.isGrounded || Math.abs(helicopterPlayer.currentMoveSpeed || 0) < 1.0);
+            const engineOff = !helicopterPlayer.isEngineRunning;
+            const fuelPumpOff = !helicopterPlayer.isFuelPumpOn;
+            const electricalOff = !helicopterPlayer.isElectricalOn;
 
-            const engineOff = helicopterPlayer.engineOn === false || 
-                              helicopterPlayer.isEngineRunning === false || 
-                              helicopterPlayer.engineState === 'OFF' || 
-                              (!helicopterPlayer.engineOn && !helicopterPlayer.isEngineRunning && helicopterPlayer.engineState !== 'RUNNING');
-
-            const fuelPumpOff = helicopterPlayer.fuelPumpOn === false || 
-                                 helicopterPlayer.fuelPump === false || 
-                                 helicopterPlayer.isFuelPumpOn === false || 
-                                 (!helicopterPlayer.fuelPumpOn && !helicopterPlayer.fuelPump);
-
-            const electricalOff = helicopterPlayer.electricalOn === false || 
-                                  helicopterPlayer.batteryOn === false || 
-                                  helicopterPlayer.battery === false || 
-                                  helicopterPlayer.isElectricalOn === false || 
-                                  (!helicopterPlayer.electricalOn && !helicopterPlayer.batteryOn && !helicopterPlayer.battery);
-
-            const allSystemsOff = engineOff && fuelPumpOff && electricalOff;
-
-            if (isLanded && allSystemsOff) {
+            if (isLanded && (engineOff && fuelPumpOff && electricalOff)) {
                 this.state = 'DISEMBARKING';
-
                 if (this.raftMesh) {
                     this.raftMesh.visible = false;
                     this.raftMesh = null;
                 }
-
                 if (this.survivor) {
-                    this.survivor.disembarkNextToHelicopter(
-                        { x: -14.00, y: 4.80, z: 3.35, rotationY: 1.5533 },
-                        1.5533,
-                        4.80,
-                        true
-                    );
+                    this.survivor.disembarkNextToHelicopter({ x: -14.00, y: 4.80, z: 3.35, rotationY: 1.5533 }, 1.5533, 4.80, true);
                 }
             }
         }
 
         if (this.state === 'DISEMBARKING' && this.survivor && this.survivor.currentState === SurvivorState.COMPLETED) {
             this.state = 'RESPAWN_WAIT';
-
-            if (this.raftMesh) {
-                this.raftMesh.visible = false;
-                this.raftMesh = null;
-            }
-
-            if (this.pagerElement) {
-                this.pagerElement.style.display = 'none';
-            }
-
-            if (this.flashingLight) {
-                this.flashingLight.intensity = 0;
-            }
-            if (this.flashingMesh) {
-                this.flashingMesh.visible = false;
-            }
-
-            this.missionTimer = 120 + Math.random() * 180;
+            if (this.pagerElement) this.pagerElement.style.display = 'none';
         }
     }
 }

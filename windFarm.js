@@ -7,14 +7,9 @@ export class WindFarm {
         this.scene = scene;
         this.turbines = [];
 
-        // Expose globally for UI and kneeboard integration
         window.windFarm = this;
 
-        // Fire & Extinguishing state
         this.activeFireIndex = -1;
-        this.cooldownTimer = 0.0; 
-        this.fireSpawnTriggered = false;
-        
         this.fireParticleSystem = null;
         this.smokeParticleSystem = null;
         this.fireParticlesCount = 600;
@@ -32,7 +27,9 @@ export class WindFarm {
         this.waterHitsRequired = 30;
         this.currentWaterHits = 0;
 
-        // Configure DRACOLoader for compressed glTF models
+        // Fixed navigation frequencies for each WTG
+        this.wtgFrequencies = [350.0, 240.0, 290.0];
+
         const dracoLoader = new DRACOLoader(loadingManager);
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
 
@@ -52,7 +49,7 @@ export class WindFarm {
 
             const baseRadius = 750;
             const radiusIncrement = 180;
-            const angleStep = (Math.PI * 2) / 3; // Distribute in a circular arc pattern around main base (0,0,0)
+            const angleStep = (Math.PI * 2) / 3;
 
             for (let i = 0; i < 3; i++) {
                 const turbineGroup = baseModel.clone(true);
@@ -68,7 +65,6 @@ export class WindFarm {
                 turbineGroup.position.set(xPos, yPos, zPos);
                 turbineGroup.scale.set(0.5, 0.5, 0.5);
                 
-                // Explicitly calculate facing angle toward origin (0, 0, 0)
                 const targetX = 0;
                 const targetZ = 0;
                 const dx = targetX - xPos;
@@ -86,13 +82,7 @@ export class WindFarm {
                         child.frustumCulled = false;
                         meshes.push(child);
                         const name = child.name.toLowerCase();
-                        if (
-                            name.includes('rotor') || 
-                            name.includes('blade') || 
-                            name.includes('fan') || 
-                            name.includes('propeller') ||
-                            name.includes('spin')
-                        ) {
+                        if (name.includes('rotor') || name.includes('blade') || name.includes('fan') || name.includes('propeller') || name.includes('spin')) {
                             rotorMesh = child;
                         }
                     }
@@ -122,7 +112,6 @@ export class WindFarm {
 
                 turbineGroup.add(lightGroup);
 
-                // Tower bounding box extending from base up to the nacelle top (~85 units height), hidden by default
                 const defaultBboxConfig = { offsetX: 0, offsetY: 42.5, offsetZ: 0, sizeX: 6, sizeY: 85, sizeZ: 6 };
                 const bboxMesh = this.createBoundingBoxMesh(defaultBboxConfig, false);
                 turbineGroup.add(bboxMesh);
@@ -134,23 +123,13 @@ export class WindFarm {
                     bulb: bulb,
                     bboxMesh: bboxMesh,
                     rotationSpeed: 1.2 + (i * 0.2) + Math.random() * 0.4,
-                    timeOffset: i * 2.5 + Math.random() * 5
+                    timeOffset: i * 2.5 + Math.random() * 5,
+                    frequency: this.wtgFrequencies[i]
                 });
             }
 
-            const canvas = document.querySelector('canvas');
-            if (canvas && canvas.__threeRenderer) {
-                canvas.__threeRenderer.compile(this.scene, window.camera || new THREE.PerspectiveCamera());
-            }
-
             this.initFireVFX();
-
-            if (this.turbines.length > 0 && !this.fireSpawnTriggered) {
-                this.spawnFire();
-                this.fireSpawnTriggered = true;
-            }
-
-            console.log("Successfully spawned 3 circular wind turbines with full-height tower bounding boxes (hidden by default).");
+            console.log("Successfully loaded 3 wind turbines with fixed navigation frequencies.");
 
         }, undefined, (error) => {
             console.error("WTG model failed to load for wind farm:", error);
@@ -159,36 +138,11 @@ export class WindFarm {
 
     createBoundingBoxMesh(config, visible = false) {
         const geo = new THREE.BoxGeometry(config.sizeX, config.sizeY, config.sizeZ);
-        const mat = new THREE.MeshBasicMaterial({
-            color: 0x38bdf8,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.4
-        });
+        const mat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, transparent: true, opacity: 0.4 });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(config.offsetX, config.offsetY, config.offsetZ);
-        mesh.visible = false; // Forced invisible to player
+        mesh.visible = false;
         return mesh;
-    }
-
-    applyBoundingBox(config, visible = false) {
-        this.turbines.forEach((turbine) => {
-            if (turbine.bboxMesh) {
-                turbine.group.remove(turbine.bboxMesh);
-                turbine.bboxMesh.geometry.dispose();
-            }
-            const newMesh = this.createBoundingBoxMesh(config, false);
-            turbine.group.add(newMesh);
-            turbine.bboxMesh = newMesh;
-        });
-    }
-
-    setBoundingBoxVisibility(visible) {
-        this.turbines.forEach((turbine) => {
-            if (turbine.bboxMesh) {
-                turbine.bboxMesh.visible = false; // Forced invisible
-            }
-        });
     }
 
     getCollisionBoxes() {
@@ -204,7 +158,6 @@ export class WindFarm {
     }
 
     initFireVFX() {
-        // --- High-Fidelity Fire Particles ---
         this.fireParticleGeo = new THREE.BufferGeometry();
         const firePositions = new Float32Array(this.fireParticlesCount * 3);
         
@@ -230,28 +183,17 @@ export class WindFarm {
         fireGrad.addColorStop(0.0, 'rgba(255, 255, 240, 1.0)');
         fireGrad.addColorStop(0.2, 'rgba(255, 180, 50, 0.9)');
         fireGrad.addColorStop(0.5, 'rgba(255, 50, 0, 0.4)');
-        fireGrad.addColorStop(0.8, 'rgba(150, 10, 0, 0.1)');
         fireGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         fireCtx.fillStyle = fireGrad;
         fireCtx.fillRect(0, 0, 256, 256);
         const fireTexture = new THREE.CanvasTexture(fireCanvas);
 
-        const fireMat = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 16.0,
-            map: fireTexture,
-            transparent: true,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            opacity: 0.95
-        });
-
+        const fireMat = new THREE.PointsMaterial({ color: 0xffffff, size: 16.0, map: fireTexture, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.95 });
         this.fireParticleSystem = new THREE.Points(this.fireParticleGeo, fireMat);
         this.fireParticleSystem.frustumCulled = false;
         this.fireParticleSystem.visible = false;
         this.scene.add(this.fireParticleSystem);
 
-        // --- High-Fidelity Smoke Particles ---
         this.smokeParticleGeo = new THREE.BufferGeometry();
         const smokePositions = new Float32Array(this.smokeParticlesCount * 3);
 
@@ -276,29 +218,19 @@ export class WindFarm {
         const smokeGrad = smokeCtx.createRadialGradient(128, 128, 0, 128, 128, 128);
         smokeGrad.addColorStop(0.0, 'rgba(70, 70, 70, 0.7)');
         smokeGrad.addColorStop(0.35, 'rgba(50, 50, 50, 0.45)');
-        smokeGrad.addColorStop(0.7, 'rgba(25, 25, 25, 0.15)');
         smokeGrad.addColorStop(1.0, 'rgba(0, 0, 0, 0)');
         smokeCtx.fillStyle = smokeGrad;
         smokeCtx.fillRect(0, 0, 256, 256);
         const smokeTexture = new THREE.CanvasTexture(smokeCanvas);
 
-        const smokeMat = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 32.0,
-            map: smokeTexture,
-            transparent: true,
-            blending: THREE.NormalBlending,
-            depthWrite: false,
-            opacity: 0.65
-        });
-
+        const smokeMat = new THREE.PointsMaterial({ color: 0xffffff, size: 32.0, map: smokeTexture, transparent: true, blending: THREE.NormalBlending, depthWrite: false, opacity: 0.65 });
         this.smokeParticleSystem = new THREE.Points(this.smokeParticleGeo, smokeMat);
         this.smokeParticleSystem.frustumCulled = false;
         this.smokeParticleSystem.visible = false;
         this.scene.add(this.smokeParticleSystem);
     }
 
-    spawnFire() {
+    spawnRandomFire() {
         if (this.turbines.length === 0) return;
         const randomIndex = Math.floor(Math.random() * this.turbines.length);
         this.spawnSpecificFire(randomIndex);
@@ -314,12 +246,29 @@ export class WindFarm {
         if (this.fireParticleSystem) this.fireParticleSystem.visible = true;
         if (this.smokeParticleSystem) this.smokeParticleSystem.visible = true;
 
-        const turbinePos = this.turbines[index].group.position;
-        console.log(`[WTG FIRE] REALISTIC VOLUMETRIC FIRE ACTIVE on Wind Turbine #${index + 1} at X: ${turbinePos.x.toFixed(1)}, Z: ${turbinePos.z.toFixed(1)}!`);
+        const turbine = this.turbines[index];
+        const freq = turbine.frequency;
+
+        // Trigger pager notification popup matching rescue mission implementation
+        const pagerEl = document.getElementById('rescue-pager-panel');
+        const freqDisplay = document.getElementById('pager-freq');
+        const statusDisplay = document.getElementById('pager-status');
+        const titleEl = document.getElementById('pager-title');
+        const callTypeEl = document.getElementById('pager-call-type');
+
+        if (pagerEl && freqDisplay && statusDisplay) {
+            if (titleEl) titleEl.textContent = 'PAGER [WTG FIRE]';
+            if (callTypeEl) callTypeEl.textContent = `WTG #${index + 1} ALARM`;
+            freqDisplay.textContent = `${freq.toFixed(1)} kHz`;
+            statusDisplay.textContent = `WTG FIRE! EXTINGUISH`;
+            pagerEl.style.display = 'block';
+        }
+
+        console.log(`[WindFarm] WTG #${index + 1} fire started! Navigation frequency: ${freq} kHz`);
     }
 
     extinguishFire() {
-        console.log(`[WTG FIRE] Fire on turbine #${this.activeFireIndex + 1} successfully extinguished!`);
+        console.log(`[WindFarm] Fire on turbine #${this.activeFireIndex + 1} successfully extinguished!`);
         this.activeFireIndex = -1;
         if (this.scene) {
             this.scene.userData.activeFireIndex = -1;
@@ -327,8 +276,10 @@ export class WindFarm {
         if (this.fireParticleSystem) this.fireParticleSystem.visible = false;
         if (this.smokeParticleSystem) this.smokeParticleSystem.visible = false;
 
-        this.cooldownTimer = Math.random() * 120 + 60;
-        console.log(`[WTG FIRE] Next fire will spawn in ${(this.cooldownTimer / 60).toFixed(1)} minutes.`);
+        const pagerEl = document.getElementById('rescue-pager-panel');
+        if (pagerEl) {
+            pagerEl.style.display = 'none';
+        }
     }
 
     update(delta, helicopterPosition, waterSystem) {
@@ -336,35 +287,6 @@ export class WindFarm {
 
         if (this.scene) {
             this.scene.userData.activeFireIndex = this.activeFireIndex;
-        }
-
-        if (this.activeFireIndex === -1 && this.turbines.length > 0) {
-            // Check player ready state (landed on mainbase helipad with full fuel and full water)
-            const player = window.player;
-            if (player && player.model) {
-                const distToHelipadCenter = Math.hypot(player.model.position.x, player.model.position.z);
-                const groundLevel = typeof player.getCurrentGroundLevel === 'function' ? player.getCurrentGroundLevel() : 6.236;
-                const isLandedOnBase = (distToHelipadCenter < 12.0) && (player.model.position.y <= groundLevel + 0.1);
-
-                const maxFuel = player.maxFuelKg || 1000;
-                const isFuelFull = (player.fuelKg !== undefined) ? (player.fuelKg >= maxFuel - 1.0) : true;
-
-                const maxWater = player.maxWaterTankKg || 1000;
-                const isWaterFull = (player.waterTankKg !== undefined) ? (player.waterTankKg >= maxWater - 1.0) : true;
-
-                if (isLandedOnBase && isFuelFull && isWaterFull) {
-                    // Accelerate cooldown timer to spawn within 5 seconds after refueling/reloading when no WTG is on fire
-                    if (this.cooldownTimer > 5.0) {
-                        this.cooldownTimer = 2.0 + Math.random() * 3.0; // ~3 to 5 seconds
-                        console.log(`[WTG FIRE] Player landed and ready with full fuel/water. Reducing fire spawn timer to ${this.cooldownTimer.toFixed(1)}s.`);
-                    }
-                }
-            }
-
-            this.cooldownTimer -= delta;
-            if (this.cooldownTimer <= 0) {
-                this.spawnFire();
-            }
         }
 
         if (this.activeFireIndex !== -1 && this.turbines[this.activeFireIndex]) {
@@ -463,9 +385,7 @@ export class WindFarm {
         this.turbines.forEach((turbine) => {
             if (helicopterPosition) {
                 const distSq = turbine.group.position.distanceToSquared(helicopterPosition);
-                if (distSq > cullDistanceSq) {
-                    return;
-                }
+                if (distSq > cullDistanceSq) return;
             }
 
             if (turbine.rotor) {
@@ -474,7 +394,7 @@ export class WindFarm {
 
             if (turbine.light && turbine.bulb) {
                 turbine.timeOffset += delta;
-                const flicker = Math.sin(turbine.timeOffset * 25.0) * 0.8 + Math.sin(turbine.timeOffset * 47.0) * 0.4 + (Math.random() - 0.5) * 0.3;
+                const flicker = Math.sin(turbine.timeOffset * 25.0) * 0.8;
                 const cycle = turbine.timeOffset % 1.0;
                 const isOn = cycle < 0.4;
                 
