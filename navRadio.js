@@ -23,13 +23,13 @@ export class NavRadio {
         const wtg2Pos = new THREE.Vector3(Math.cos(1 * angleStep) * (baseRadius + radiusIncrement), 0, Math.sin(1 * angleStep) * (baseRadius + radiusIncrement)).add(basePos);
         const wtg3Pos = new THREE.Vector3(Math.cos(2 * angleStep) * (baseRadius + (radiusIncrement * 2)), 0, Math.sin(2 * angleStep) * (baseRadius + (radiusIncrement * 2))).add(basePos);
 
-        // Station registry: 210 kHz mapped to Approach Buoy with fallback offshore position
+        // Station registry: 210 kHz mapped to Approach Buoy with strict lengthSq origin check
         this.stations = {
             210: { 
                 name: 'APPROACH BUOY', 
                 position: () => {
                     const buoyPos = this.buoySystem ? this.buoySystem.getNDBPosition() : null;
-                    return buoyPos || new THREE.Vector3(150, 0, -200);
+                    return (buoyPos && buoyPos.lengthSq() > 0.01) ? buoyPos : new THREE.Vector3(150, 0, -200);
                 }
             },
             350: { name: 'WTG #1 (350 kHz)', position: wtg1Pos },
