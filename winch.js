@@ -1,3 +1,4 @@
+// --- File: winch.js ---
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -99,6 +100,12 @@ export class WinchSystem {
 
         if (!helicopterPlayer.isGearUp) {
             console.warn("Winch System: Cannot operate winch while landing gear is extended.");
+            return;
+        }
+
+        // Prevent lowering winch if water spray system is currently active / dispensing
+        if (window.inputManager && window.inputManager.keys && window.inputManager.keys['Space']) {
+            console.warn("Winch System: Cannot lower winch while water spray system is active.");
             return;
         }
 

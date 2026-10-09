@@ -1,3 +1,4 @@
+// --- File: waterSystem.js ---
 import * as THREE from 'three';
 
 export class WaterSystem {
@@ -180,7 +181,11 @@ export class WaterSystem {
         // Water cannot be dispensed if landing gear is extended (!isGearUp)
         const gearExtended = helicopterPlayer.isGearUp !== undefined ? !helicopterPlayer.isGearUp : false;
 
-        if (isDispensing && helicopterPlayer.waterTankKg > 0 && !gearExtended) {
+        // Check winch system status: Water cannot be dispensed simultaneously while winch is lowered/operating
+        const winch = helicopterPlayer.winchSystem || (helicopterPlayer.rescueMission ? helicopterPlayer.rescueMission.winchSystem : null);
+        const winchActive = winch && winch.winchState !== 'UP';
+
+        if (isDispensing && helicopterPlayer.waterTankKg > 0 && !gearExtended && !winchActive) {
             const dischargeRate = 350.0; 
             const dropAmount = dischargeRate * delta;
             helicopterPlayer.waterTankKg = Math.max(0, helicopterPlayer.waterTankKg - dropAmount);
