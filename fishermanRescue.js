@@ -1,3 +1,7 @@
+/**
+ * fishermanRescue.js
+ * Fisherman rescue mission managing the burning fishing boat, water extinguishing, winch rescue, and dynamic SOS frequencies.
+ */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -69,8 +73,7 @@ export class FishermanRescueMission {
         
         this.animationSpeed = 2.0;
         this.boatPosition = new THREE.Vector3(0, -1.84, -30);
-        this.rescueFreq = 210.0;
-        this.baseFreq = 210.0;
+        this.rescueFreq = 310.0; // Dynamic rescue frequency distinct from fixed channels (210, 240, 290, 350)
 
         this.redLightOffset = new THREE.Vector3(0.55, 2.38, -1.33);
         this.greenLightOffset = new THREE.Vector3(0.57, 2.37, 1.40);
@@ -116,7 +119,7 @@ export class FishermanRescueMission {
             </div>
             <div style="background: #111215; border: 1px inset #2a2d32; border-radius: 3px; padding: 8px; text-align: center;">
                 <div style="font-size: 7px; color: #9ca3af; letter-spacing: 0.5px; margin-bottom: 2px;">FISHING BOAT SOS</div>
-                <div id="fisherman-pager-freq" style="font-size: 15px; font-weight: bold; color: #ff3333; text-shadow: 0 0 6px rgba(255,51,51,0.6); letter-spacing: 1px;">210.0 kHz</div>
+                <div id="fisherman-pager-freq" style="font-size: 15px; font-weight: bold; color: #ff3333; text-shadow: 0 0 6px rgba(255,51,51,0.6); letter-spacing: 1px;">310.0 kHz</div>
             </div>
             <div style="margin-top: 8px; font-size: 7px; color: #9ca3af; text-align: center; line-height: 1.3;">
                 <div id="fisherman-pager-status">EXTINGUISH FIRE</div>
@@ -353,11 +356,9 @@ export class FishermanRescueMission {
             if (window.navRadio.stations[this.rescueFreq]) {
                 delete window.navRadio.stations[this.rescueFreq];
             }
-            if (window.navRadio.stations[this.baseFreq]) {
-                delete window.navRadio.stations[this.baseFreq];
-            }
         }
 
+        // Ensure fixed navigation frequencies (210, 240, 290, 350) are never overridden
         const fixedFrequencies = [210.0, 240.0, 290.0, 350.0];
         let candidateFreq;
         do {
@@ -415,10 +416,6 @@ export class FishermanRescueMission {
             window.navRadio.stations[this.rescueFreq] = {
                 name: `Fishing Boat SOS (${this.rescueFreq.toFixed(1)} kHz)`,
                 position: this.boatPosition
-            };
-            window.navRadio.stations[this.baseFreq] = {
-                name: `Main Base (${this.baseFreq.toFixed(1)} kHz)`,
-                position: centerPos
             };
         }
 
@@ -483,17 +480,11 @@ export class FishermanRescueMission {
         this.petewaterActions.forEach(action => action.play());
         this.petewavingActions.forEach(action => action.play());
 
+        // Safely clean up only the dynamic mission frequency without affecting fixed channels (210, 240, 290, 350)
         if (window.navRadio && window.navRadio.stations) {
             if (window.navRadio.stations[this.rescueFreq]) {
                 delete window.navRadio.stations[this.rescueFreq];
             }
-            if (window.navRadio.stations[this.baseFreq]) {
-                delete window.navRadio.stations[this.baseFreq];
-            }
-            window.navRadio.stations[210.0] = {
-                name: "Buoy System (210.0 kHz)",
-                position: (window.buoySystem && window.buoySystem.getBuoyPosition) ? window.buoySystem.getBuoyPosition() : new THREE.Vector3(0, 0, 0)
-            };
         }
     }
 
@@ -757,13 +748,6 @@ export class FishermanRescueMission {
                     if (window.navRadio.stations[this.rescueFreq]) {
                         delete window.navRadio.stations[this.rescueFreq];
                     }
-                    if (window.navRadio.stations[this.baseFreq]) {
-                        delete window.navRadio.stations[this.baseFreq];
-                    }
-                    window.navRadio.stations[210.0] = {
-                        name: "Buoy System (210.0 kHz)",
-                        position: (window.buoySystem && window.buoySystem.getBuoyPosition) ? window.buoySystem.getBuoyPosition() : new THREE.Vector3(0, 0, 0)
-                    };
                 }
             }
         }
