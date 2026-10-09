@@ -61,7 +61,7 @@ export class SirenSystem {
         this.bulbMesh.position.set(0, 0.5, 0);
         this.internalMechanism.add(this.bulbMesh);
 
-        // Parabolic Reflector Wing / Mirror[cite: 8]
+        // Parabolic Reflector Wing / Mirror
         const reflectorGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.7, 16, 1, true, 0, Math.PI);
         const reflectorMat = new THREE.MeshStandardMaterial({ 
             color: 0xffffff, 
@@ -126,7 +126,15 @@ export class SirenSystem {
     }
 
     update(delta, windFarm) {
-        const emergencyActive = windFarm && windFarm.activeFireIndex !== -1;
+        // Check window.missionManager, rescueMission state, windfarm fire index, or visible pager panels
+        const missionMgrActive = window.missionManager && window.missionManager.activeMissionType !== null;
+        const rescueActive = window.rescueMission && ['ACTIVE', 'ON_SCENE', 'WINCHING', 'RETURNING'].includes(window.rescueMission.state);
+        const wtgFireActive = windFarm && windFarm.activeFireIndex !== -1;
+        
+        const pagerPanel = document.getElementById('rescue-pager-panel');
+        const pagerVisible = pagerPanel && window.getComputedStyle(pagerPanel).display !== 'none';
+
+        const emergencyActive = missionMgrActive || rescueActive || wtgFireActive || pagerVisible;
 
         this.sirens.forEach(siren => {
             if (emergencyActive) {
