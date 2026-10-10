@@ -12,6 +12,7 @@ export class HelicopterAudio {
         this.shutdownBuffer = null;
         this.shutdownSource = null;
         this.shutdownGain = null;
+        this.lowFuelBuffer = null;
 
         // Preload all audio buffers immediately upon creation
         this._preloadBuffers();
@@ -30,6 +31,7 @@ export class HelicopterAudio {
                 this._loadSound('rotorsound.mp3').then(buf => this.rotorBuffer = buf);
                 this._loadSound('enginestartup.mp3').then(buf => this.startupBuffer = buf);
                 this._loadSound('engineshutdown.mp3').then(buf => this.shutdownBuffer = buf);
+                this._loadSound('lowfuel.mp3').then(buf => this.lowFuelBuffer = buf);
             }
         }, 200);
     }
@@ -42,6 +44,7 @@ export class HelicopterAudio {
         console.log("Rotor Buffer Loaded:", !!this.rotorBuffer, this.rotorBuffer ? `(${this.rotorBuffer.duration.toFixed(2)}s)` : "");
         console.log("Startup Buffer Loaded:", !!this.startupBuffer, this.startupBuffer ? `(${this.startupBuffer.duration.toFixed(2)}s)` : "");
         console.log("Shutdown Buffer Loaded:", !!this.shutdownBuffer, this.shutdownBuffer ? `(${this.shutdownBuffer.duration.toFixed(2)}s)` : "");
+        console.log("Low Fuel Buffer Loaded:", !!this.lowFuelBuffer, this.lowFuelBuffer ? `(${this.lowFuelBuffer.duration.toFixed(2)}s)` : "");
         console.log("Active Rotor Source:", !!this.rotorSource);
         console.groupEnd();
     }
@@ -56,6 +59,29 @@ export class HelicopterAudio {
         } catch (e) {
             console.error(`[AudioDebug] Exception loading sound from ${url}:`, e);
             return null;
+        }
+    }
+
+    async playLowFuelSound() {
+        try {
+            if (this.ctxMgr) this.ctxMgr.ensureContextRunning();
+            if (!this.lowFuelBuffer) {
+                this.lowFuelBuffer = await this._loadSound('lowfuel.mp3');
+            }
+            if (this.lowFuelBuffer && this.audioCtx && this.masterGain) {
+                const now = this.audioCtx.currentTime;
+                const source = this.audioCtx.createBufferSource();
+                source.buffer = this.lowFuelBuffer;
+
+                const gainNode = this.audioCtx.createGain();
+                gainNode.gain.setValueAtTime(0.8, now);
+
+                source.connect(gainNode);
+                gainNode.connect(this.masterGain);
+                source.start(now);
+            }
+        } catch (e) {
+            console.error("[AudioDebug] Error playing low fuel sound:", e);
         }
     }
 
