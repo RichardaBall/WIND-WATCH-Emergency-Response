@@ -102,7 +102,7 @@ export class HelicopterPlayer {
         this.enginePower = 0.0;       
         this.targetEnginePower = 0.0; 
         this.engineCooldownTimer = 0.0; 
-        this.totalShutdownDuration = 8.0; // Anchored to 8s audio track
+        this.totalShutdownDuration = 8.0; // Anchored to 8s audio track[cite: 2]
 
         this.isGearUp = false; 
 
@@ -239,7 +239,7 @@ export class HelicopterPlayer {
         const heliAudio = this._getHeliAudio();
 
         if (this.targetEnginePower > 0) {
-            // Initiate shutdown sequence
+            // Initiate shutdown sequence[cite: 2]
             this.targetEnginePower = 0.0;
             
             const shutdownDuration = (heliAudio && heliAudio.helicopter && heliAudio.helicopter.shutdownBuffer) 
@@ -250,11 +250,11 @@ export class HelicopterPlayer {
             this.engineCooldownTimer = shutdownDuration; 
             if (heliAudio && typeof heliAudio.playEngineShutdown === 'function') heliAudio.playEngineShutdown();
         } else {
-            // Initiate startup sequence
+            // Initiate startup sequence[cite: 2]
             this.targetEnginePower = 1.0;
             this.isEngineRunning = true;
             this.fuelStarvationTimer = 0.0;
-            this.engineCooldownTimer = 5.0; // Startup sync lock
+            this.engineCooldownTimer = 5.0; // Startup sync lock[cite: 2]
             if (heliAudio && typeof heliAudio.playEngineStartup === 'function') heliAudio.playEngineStartup();
             
             for (let name in this.actions) {
@@ -377,7 +377,7 @@ export class HelicopterPlayer {
 
         if (this.mixer) this.mixer.update(delta);
 
-        // Fuel starvation due to fuel pump turned off mid-flight
+        // Fuel starvation due to fuel pump turned off mid-flight[cite: 2]
         if (this.targetEnginePower > 0 && !this.isFuelPumpOn) {
             this.fuelStarvationTimer += delta;
             if (this.fuelStarvationTimer >= 5.0) { 
@@ -391,7 +391,7 @@ export class HelicopterPlayer {
             this.fuelStarvationTimer = 0.0;
         }
 
-        // Active fuel burn
+        // Active fuel burn[cite: 2]
         if (this.enginePower > 0.01 && this.fuelKg > 0 && this.isFuelPumpOn) {
             const currentMass = this.getTotalMass();
             const massMultiplier = currentMass / this.baselineMassKg;
@@ -403,13 +403,17 @@ export class HelicopterPlayer {
             const frameBurn = this.maxFuelBurnRatePerSec * this.enginePower * massMultiplier * aeroDragMultiplier * delta;
             this.fuelKg = Math.max(0, this.fuelKg - frameBurn);
 
-            // Fuel starvation due to empty tank
+            // Fuel exhaustion: initiate standard engine shutdown sequence just like pressing [E]
             if (this.fuelKg <= 0 && this.targetEnginePower > 0) {
                 this.targetEnginePower = 0.0;
-                const shutdownDuration = (heliAudio && heliAudio.helicopter && heliAudio.helicopter.shutdownBuffer) ? heliAudio.helicopter.shutdownBuffer.duration : 8.0;
+                const shutdownDuration = (heliAudio && heliAudio.helicopter && heliAudio.helicopter.shutdownBuffer) 
+                    ? heliAudio.helicopter.shutdownBuffer.duration 
+                    : 8.0;
                 this.totalShutdownDuration = shutdownDuration;
                 this.engineCooldownTimer = shutdownDuration;
-                if (heliAudio && typeof heliAudio.triggerFuelStarvation === 'function') heliAudio.triggerFuelStarvation();
+                if (heliAudio && typeof heliAudio.playEngineShutdown === 'function') {
+                    heliAudio.playEngineShutdown();
+                }
             }
         }
 
@@ -436,11 +440,11 @@ export class HelicopterPlayer {
             if (this.strobeBulbMesh) this.strobeBulbMesh.visible = false;
         }
 
-        // STRICT TIME-ANCHORED SHUTDOWN LOGIC
+        // STRICT TIME-ANCHORED SHUTDOWN LOGIC[cite: 2]
         if (this.targetEnginePower === 0 && this.engineCooldownTimer > 0) {
-            // Calculate exact progress from 0.0 (start) to 1.0 (end) over the shutdown duration
+            // Calculate exact progress from 0.0 (start) to 1.0 (end) over the shutdown duration[cite: 2]
             const progress = 1.0 - (this.engineCooldownTimer / this.totalShutdownDuration);
-            // Apply a smooth inertia curve: starts fast and eases out to 0.0 at progress === 1.0
+            // Apply a smooth inertia curve: starts fast and eases out to 0.0 at progress === 1.0[cite: 2]
             this.enginePower = Math.max(0.0, 1.0 - Math.pow(progress, 1.3));
 
             if (this.engineCooldownTimer <= 0.0) {
@@ -448,7 +452,7 @@ export class HelicopterPlayer {
                 this.isEngineRunning = false;
             }
         } else if (this.enginePower !== this.targetEnginePower) {
-            // Normal startup spool up
+            // Normal startup spool up[cite: 2]
             const spoolDuration = 5.0;
             const rate = 1.0 / spoolDuration;
             const diff = this.targetEnginePower - this.enginePower;
@@ -468,10 +472,16 @@ export class HelicopterPlayer {
         for (let name in this.actions) {
             if (name.toLowerCase().includes('rotor') || name.toLowerCase().includes('armature') || name.includes('Арматура')) {
                 const action = this.actions[name];
-                if (isOnGround && this.targetEnginePower === 0 && this.enginePower <= 0.001) {
+                
+                let activeTimeScale = Math.max(this.enginePower * 1.2, 0.0);
+                // Autorotation: Keep rotors spinning slowly when out of fuel and airborne
+                if (this.fuelKg <= 0 && !isOnGround) {
+                    activeTimeScale = Math.max(activeTimeScale, 0.35);
+                }
+
+                if (isOnGround && this.fuelKg <= 0 && this.enginePower <= 0.001) {
                     if (action.isRunning()) action.stop();
                 } else {
-                    const activeTimeScale = Math.max(this.enginePower * 1.2, 0.0);
                     action.timeScale = activeTimeScale;
                     if (activeTimeScale > 0 && !action.isRunning()) {
                         action.reset().play();
