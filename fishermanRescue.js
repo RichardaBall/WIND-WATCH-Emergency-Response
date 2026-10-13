@@ -73,13 +73,12 @@ export class FishermanRescueMission {
         
         this.animationSpeed = 2.0;
         this.boatPosition = new THREE.Vector3(0, -1.84, -30);
-        this.rescueFreq = 310.0; // Dynamic rescue frequency distinct from fixed channels (210, 240, 290, 350)
+        this.rescueFreq = 310.0;
 
         this.redLightOffset = new THREE.Vector3(0.55, 2.38, -1.33);
         this.greenLightOffset = new THREE.Vector3(0.57, 2.37, 1.40);
         this.yellowLightOffset = new THREE.Vector3(-2.41, 6.12, 0.04);
 
-        // Searchlight target setup for mission illumination
         this.searchlightTarget = new THREE.Object3D();
         this.scene.add(this.searchlightTarget);
 
@@ -226,7 +225,7 @@ export class FishermanRescueMission {
             }
         }, undefined, (error) => { console.error('Error loading peteraising.glb:', error); });
 
-        loader.load('raising.glb', (gltf) => {
+        loader.load('peteraising.glb', (gltf) => {
             this.raisingModel = gltf.scene;
             this.raisingModel.visible = false;
             this.raisingModel.traverse((child) => {
@@ -237,7 +236,7 @@ export class FishermanRescueMission {
                 this.raisingMixer = new THREE.AnimationMixer(this.raisingModel);
                 gltf.animations.forEach(clip => this.raisingMixer.clipAction(clip).play());
             }
-        }, undefined, (error) => { console.error('Error loading raising.glb:', error); });
+        }, undefined, (error) => { console.error('Error loading peteraising.glb:', error); });
 
         loader.load('petewavingbye.glb', (gltf) => {
             this.petewavingbyeModel = gltf.scene;
@@ -303,7 +302,7 @@ export class FishermanRescueMission {
         this.fireParticleSystem = new THREE.Points(this.fireParticleGeo, this.fireMat);
         this.fireParticleSystem.frustumCulled = false;
         this.fireParticleSystem.position.copy(this.fireOffset);
-        this.boatModel.add(this.fireParticleSystem);
+        if (this.boatModel) this.boatModel.add(this.fireParticleSystem);
 
         this.smokeParticleGeo = new THREE.BufferGeometry();
         const smokePositions = new Float32Array(this.smokeParticlesCount * 3);
@@ -348,7 +347,31 @@ export class FishermanRescueMission {
         this.smokeParticleSystem = new THREE.Points(this.smokeParticleGeo, this.smokeMat);
         this.smokeParticleSystem.frustumCulled = false;
         this.smokeParticleSystem.position.copy(this.fireOffset);
-        this.boatModel.add(this.smokeParticleSystem);
+        if (this.boatModel) this.boatModel.add(this.smokeParticleSystem);
+    }
+
+    _resetFireParticles() {
+        if (this.fireParticleGeo && this.fireParticleGeo.attributes.position) {
+            const firePosArr = this.fireParticleGeo.attributes.position.array;
+            for (let i = 0; i < this.fireParticlesCount; i++) {
+                firePosArr[i * 3] = (Math.random() - 0.5) * 3.0;
+                firePosArr[i * 3 + 1] = Math.random() * 6.0;
+                firePosArr[i * 3 + 2] = (Math.random() - 0.5) * 3.0;
+                this.fireLifetimes[i] = Math.random() * this.fireMaxLifetimes[i];
+            }
+            this.fireParticleGeo.attributes.position.needsUpdate = true;
+        }
+
+        if (this.smokeParticleGeo && this.smokeParticleGeo.attributes.position) {
+            const smokePosArr = this.smokeParticleGeo.attributes.position.array;
+            for (let i = 0; i < this.smokeParticlesCount; i++) {
+                smokePosArr[i * 3] = (Math.random() - 0.5) * 4.0;
+                smokePosArr[i * 3 + 1] = 2.0 + Math.random() * 16.0;
+                smokePosArr[i * 3 + 2] = (Math.random() - 0.5) * 4.0;
+                this.smokeLifetimes[i] = Math.random() * this.smokeMaxLifetimes[i];
+            }
+            this.smokeParticleGeo.attributes.position.needsUpdate = true;
+        }
     }
 
     startMission() {
@@ -358,7 +381,6 @@ export class FishermanRescueMission {
             }
         }
 
-        // Ensure fixed navigation frequencies (210, 240, 290, 350) are never overridden
         const fixedFrequencies = [210.0, 240.0, 290.0, 350.0];
         let candidateFreq;
         do {
@@ -375,6 +397,10 @@ export class FishermanRescueMission {
         this.disembarkTimer = 0;
         this.hasActiveFire = true;
         this.currentWaterHits = 0;
+
+        if (this.fireParticleSystem) this.fireParticleSystem.visible = true;
+        if (this.smokeParticleSystem) this.smokeParticleSystem.visible = true;
+        this._resetFireParticles();
 
         const angle = Math.random() * Math.PI * 2;
         const distance = 950 + Math.random() * 600;
@@ -393,6 +419,12 @@ export class FishermanRescueMission {
         if (this.boatModel) {
             this.boatModel.position.copy(this.boatPosition);
             this.boatModel.visible = true;
+            if (this.fireParticleSystem && !this.boatModel.getObjectById(this.fireParticleSystem.id)) {
+                this.boatModel.add(this.fireParticleSystem);
+            }
+            if (this.smokeParticleSystem && !this.boatModel.getObjectById(this.smokeParticleSystem.id)) {
+                this.boatModel.add(this.smokeParticleSystem);
+            }
         }
 
         if (this.searchlightTarget) {
@@ -465,6 +497,8 @@ export class FishermanRescueMission {
         }
         if (this.fireParticleSystem) this.fireParticleSystem.visible = true;
         if (this.smokeParticleSystem) this.smokeParticleSystem.visible = true;
+        this._resetFireParticles();
+
         if (this.boatModel) this.boatModel.visible = false;
         if (this.searchlightTarget) {
             this.scene.remove(this.searchlightTarget);
@@ -480,7 +514,6 @@ export class FishermanRescueMission {
         this.petewaterActions.forEach(action => action.play());
         this.petewavingActions.forEach(action => action.play());
 
-        // Safely clean up only the dynamic mission frequency without affecting fixed channels (210, 240, 290, 350)
         if (window.navRadio && window.navRadio.stations) {
             if (window.navRadio.stations[this.rescueFreq]) {
                 delete window.navRadio.stations[this.rescueFreq];
@@ -628,7 +661,6 @@ export class FishermanRescueMission {
         const currentCableLength = winch.currentCableLength || 0.0;
 
         if (this.activeRescue === null && this.rescuedCount < 2 && this.boatModel && !this.hasActiveFire) {
-            // Check Petewaving (center: {x:6, y:0.6, z:-0.1})
             if (this.petewavingObject && this.petewavingObject.visible) {
                 const localHookPos = hookPos.clone();
                 this.boatModel.worldToLocal(localHookPos);
@@ -637,7 +669,6 @@ export class FishermanRescueMission {
                     this.triggerRescue('waving');
                 }
             }
-            // Check Petewater (center: {x:7.2, y:-1.9, z:-7.4})
             if (this.activeRescue === null && this.petewaterObject && this.petewaterObject.visible) {
                 const localHookPos = hookPos.clone();
                 this.boatModel.worldToLocal(localHookPos);
@@ -657,9 +688,12 @@ export class FishermanRescueMission {
                     this.activeRescue = null;
                     this.rescuedCount++;
                     
-                    if (this.rescuedCount >= 2 && this.pagerElement) {
-                        this.pagerElement.style.display = 'none';
-                    } else if (this.rescuedCount < 2 && this.statusDisplay) {
+                    if (this.rescuedCount >= 2) {
+                        if (this.pagerElement) this.pagerElement.style.display = 'none';
+                        if (window.navRadio && window.navRadio.stations && window.navRadio.stations[this.rescueFreq]) {
+                            delete window.navRadio.stations[this.rescueFreq];
+                        }
+                    } else if (this.statusDisplay) {
                         this.statusDisplay.textContent = `RESCUE NEXT PETE`;
                     }
                     return;
@@ -706,6 +740,9 @@ export class FishermanRescueMission {
                 if (this.pagerElement) {
                     this.pagerElement.style.display = 'none';
                 }
+                if (window.navRadio && window.navRadio.stations && window.navRadio.stations[this.rescueFreq]) {
+                    delete window.navRadio.stations[this.rescueFreq];
+                }
             }
 
             const heliPos = player.model.position;
@@ -743,11 +780,6 @@ export class FishermanRescueMission {
                     this.petewavingbyeModel.position.copy(this.goodbyeWorldPosition);
                     this.petewavingbyeModel.rotation.y = this.goodbyeWorldRotationY;
                     this.petewavingbyeModel.visible = true;
-                }
-                if (window.navRadio && window.navRadio.stations) {
-                    if (window.navRadio.stations[this.rescueFreq]) {
-                        delete window.navRadio.stations[this.rescueFreq];
-                    }
                 }
             }
         }
