@@ -161,6 +161,9 @@ export class RescueMission {
     }
 
     reset() {
+        if (window.navRadio && window.navRadio.stations && this.rescueFreq) {
+            delete window.navRadio.stations[this.rescueFreq];
+        }
         if (this.raftMesh) {
             this._resetRaftVisibility(this.raftMesh);
             this.raftMesh.visible = false;
