@@ -74,7 +74,7 @@ export function createOcean(scene, sunLight) {
 
     water.updateWaves = function(time) {
         if (water.material.uniforms['time']) {
-            water.material.uniforms['time'].value += 0.016; 
+            water.material.uniforms['time'].value += 0.004; 
         }
 
         const scaledTime = time * config.waveSpeed;

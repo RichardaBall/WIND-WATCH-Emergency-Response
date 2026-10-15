@@ -28,6 +28,7 @@ import { SharkCatchSystem } from './sharkcatch.js';
 import { AssetWarmupSystem } from './assetWarmup.js';
 import { MissionManager } from './missionManager.js';
 import { Pager } from './pager.js';
+import { ShorelineFoamSystem } from './shorelineFoam.js';
 
 const { scene, camera, renderer, water, sunLight, ambientLight, sky } = setupScene();
 const weatherSystem = new WeatherSystem();
@@ -37,6 +38,7 @@ const kneeboard = new Kneeboard();
 const pager = new Pager();
 const waterSystem = new WaterSystem(scene);
 const rotorWashSystem = new RotorWashSystem(scene);
+const shorelineFoamSystem = new ShorelineFoamSystem(scene, new THREE.Vector3(3.3690, 4.996, 0.4548));
 const helipadDebrisSystem = new HelipadDebrisSystem(scene);
 const sirenSystem = new SirenSystem(scene, null);
 
@@ -616,6 +618,10 @@ function animate() {
 
     if (rotorWashSystem && helicopterPlayer) {
         rotorWashSystem.update(delta, helicopterPlayer);
+    }
+
+    if (shorelineFoamSystem) {
+        shorelineFoamSystem.update(delta, elapsedTime, weatherData);
     }
 
     if (helipadDebrisSystem && helicopterPlayer) {
