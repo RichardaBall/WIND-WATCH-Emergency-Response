@@ -12,6 +12,7 @@ export class MissionManager {
         // Added 'fisherman' to the active mission pool rotation
         this.missionPool = ['rescue', 'windfarm', 'fisherman'];
         this.activeMissionType = null; 
+        this.lastMissionType = null; // Tracks the previously played mission to prevent repetition
         this.state = 'IDLE'; 
         this.cooldownTimer = 0;
         this.initialDelayTimer = 5.0;
@@ -22,8 +23,16 @@ export class MissionManager {
     startRandomMission() {
         if (this.activeMissionType !== null) return;
 
-        const randomIndex = Math.floor(Math.random() * this.missionPool.length);
-        this.activeMissionType = this.missionPool[randomIndex];
+        // Filter out the last played mission so it cannot repeat twice in a row
+        let availableMissions = this.missionPool;
+        if (this.lastMissionType !== null && this.missionPool.length > 1) {
+            availableMissions = this.missionPool.filter(m => m !== this.lastMissionType);
+        }
+
+        console.log(`[MissionManager] Last mission was: ${this.lastMissionType}. Available pool:`, availableMissions);
+
+        const randomIndex = Math.floor(Math.random() * availableMissions.length);
+        this.activeMissionType = availableMissions[randomIndex];
         this.state = 'ACTIVE';
 
         console.log(`[MissionManager] Spawning mission type: ${this.activeMissionType}`);
@@ -44,15 +53,21 @@ export class MissionManager {
     }
 
     triggerCooldown() {
+        if (this.activeMissionType) {
+            this.lastMissionType = this.activeMissionType;
+        }
         this.activeMissionType = null;
         this.state = 'COOLDOWN';
         this.cooldownTimer = 10.0;
         if (this.pager) this.pager.hide();
-        console.log('[MissionManager] Mission completed. Starting 10-second cooldown...');
+        console.log(`[MissionManager] Mission completed. Last mission set to: ${this.lastMissionType}. Starting 10-second cooldown...`);
     }
 
     handleCrash() {
         console.log('[MissionManager] Crash detected. Clearing active mission and starting cooldown.');
+        if (this.activeMissionType) {
+            this.lastMissionType = this.activeMissionType;
+        }
         this.activeMissionType = null;
         this.state = 'COOLDOWN';
         this.cooldownTimer = 10.0;

@@ -29,7 +29,7 @@ import { AssetWarmupSystem } from './assetWarmup.js';
 import { MissionManager } from './missionManager.js';
 import { Pager } from './pager.js';
 
-const { scene, camera, renderer, water, sunLight, ambientLight } = setupScene();
+const { scene, camera, renderer, water, sunLight, ambientLight, sky } = setupScene();
 const weatherSystem = new WeatherSystem();
 const soundManager = new SoundManager();
 const inputManager = new InputManager(soundManager);
@@ -98,7 +98,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
     if (loadGameBtn) {
         loadGameBtn.addEventListener('click', async () => {
-            // Explicitly initialize and unlock the Web Audio context on user click
             if (soundManager) {
                 soundManager.init();
                 soundManager.ensureContextRunning();
@@ -546,6 +545,7 @@ function animate() {
     }
 
     let delta = clock.getDelta();
+    let elapsedTime = clock.getElapsedTime();
 
     if (developerTool && developerTool.isFastForwarding) {
         delta *= developerTool.fastForwardMultiplier;
@@ -554,10 +554,13 @@ function animate() {
     if (water && water.material && water.material.uniforms && water.material.uniforms['time']) {
         water.material.uniforms['time'].value += delta * 0.3;
     }
+    if (water && typeof water.updateWaves === 'function') {
+        water.updateWaves(elapsedTime);
+    }
 
     let weatherData = null;
     try {
-        weatherData = weatherSystem.update(delta, scene, camera ? camera.position : null, sunLight, ambientLight);
+        weatherData = weatherSystem.update(delta, scene, camera ? camera.position : null, sunLight, ambientLight, sky, water);
     } catch (err) {
         console.error("Weather system update error:", err);
     }
@@ -670,7 +673,9 @@ function animate() {
             const offsetZ = dist * cosAlpha * diagFactor;
 
             const targetCameraPos = helicopterPlayer.model.position.clone().add(new THREE.Vector3(offsetX, offsetY, offsetZ));
-            camera.position.lerp(targetCameraPos, 0.1);
+            
+            // Camera position is now directly copied (snapped) to eliminate smoothing lag and jitter
+            camera.position.copy(targetCameraPos);
             camera.lookAt(helicopterPlayer.model.position);
         }
     }

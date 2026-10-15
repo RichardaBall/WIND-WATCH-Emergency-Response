@@ -2,36 +2,29 @@ import * as THREE from 'three';
 
 export class WeatherSystem {
     constructor() {
-        this.currentWeather = 'fine'; // 'fine', 'rain', 'storm'
+        this.currentWeather = 'fine';
         this.previousWeather = 'fine';
-        this.transitionProgress = 1.0; // 0.0 to 1.0 representing transition progress
-        this.weatherTransitionDuration = 15.0; // 15 seconds to fully blend between weather types
+        this.transitionProgress = 1.0;
+        this.weatherTransitionDuration = 15.0;
 
         this.transitionTimer = 0.0;
         this.targetDuration = 60.0;
 
         // Day / Night Cycle Variables (5 Minutes Total Cycle)
         this.dayNightTimer = 0.0;
-        this.dayCycleDuration = 300.0; // 5 minutes
+        this.dayCycleDuration = 300.0;
         this.sunAngle = 0.0;
 
-        // Secondary Light Source: Moon
         this.moonLight = null;
-
-        // Wind vectors
         this.windVector = new THREE.Vector3(0, 0, 0);
         this.targetWind = new THREE.Vector3(0, 0, 0);
 
-        // Rain particle system setup
         this.particleCount = 5000;
         this.rainParticles = null;
         this.rainGeo = null;
         this.rainMat = null;
         this.rainSpeeds = [];
 
-        this.baseSunIntensity = 1.2;
-
-        // Lightning variables (spaced far apart for safety)
         this.lightningTimer = 0.0;
         this.lightningInterval = 15.0;
         this.lightningFlashDuration = 0.0;
@@ -77,7 +70,7 @@ export class WeatherSystem {
 
     setupMoonLight(scene) {
         if (!this.moonLight && scene) {
-            this.moonLight = new THREE.DirectionalLight(0x335588, 0.0);
+            this.moonLight = new THREE.DirectionalLight(0x88ccff, 0.0);
             scene.add(this.moonLight);
         }
     }
@@ -89,12 +82,14 @@ export class WeatherSystem {
                     visibility: 'moderate',
                     dragMultiplier: 1.08,
                     liftMultiplier: 0.97,
-                    fogDensity: 0.006,
+                    fogDensity: 0.002,
                     dayFogColor: 0x778899,
                     nightFogColor: 0x020408,
                     sunIntensity: 0.7,
                     sunColor: 0x99aabb,
                     rainOpacity: 0.5,
+                    moonObjectIntensity: 0.1,
+                    moonOceanIntensity: 2.0,
                 };
             case 'storm':
                 return {
@@ -107,6 +102,8 @@ export class WeatherSystem {
                     sunIntensity: 0.4,
                     sunColor: 0x556677,
                     rainOpacity: 0.55,
+                    moonObjectIntensity: 0.0,
+                    moonOceanIntensity: 0.0,
                 };
             case 'fine':
             default:
@@ -114,12 +111,14 @@ export class WeatherSystem {
                     visibility: 'good',
                     dragMultiplier: 1.0,
                     liftMultiplier: 1.0,
-                    fogDensity: 0.0012,
+                    fogDensity: 0.0,
                     dayFogColor: 0xcce0ff,
                     nightFogColor: 0x030611,
                     sunIntensity: 1.2,
                     sunColor: 0xffffeb,
                     rainOpacity: 0.0,
+                    moonObjectIntensity: 0.5,
+                    moonOceanIntensity: 5.0,
                 };
         }
     }
@@ -139,15 +138,16 @@ export class WeatherSystem {
             sunIntensity: THREE.MathUtils.lerp(prevEff.sunIntensity, currEff.sunIntensity, t),
             sunColor: new THREE.Color(prevEff.sunColor).lerp(new THREE.Color(currEff.sunColor), t).getHex(),
             rainOpacity: THREE.MathUtils.lerp(prevEff.rainOpacity, currEff.rainOpacity, t),
+            moonObjectIntensity: THREE.MathUtils.lerp(prevEff.moonObjectIntensity, currEff.moonObjectIntensity, t),
+            moonOceanIntensity: THREE.MathUtils.lerp(prevEff.moonOceanIntensity, currEff.moonOceanIntensity, t),
         };
     }
 
-    update(delta, scene, cameraPos, sunLight, ambientLight) {
+    update(delta, scene, cameraPos, sunLight, ambientLight, sky, water) {
         if (!scene) return { weatherType: this.currentWeather, wind: this.windVector, effects: this.getWeatherEffects(), isNight: false };
 
         this.setupMoonLight(scene);
 
-        // --- Weather Transition Blending ---
         if (this.transitionProgress < 1.0) {
             this.transitionProgress = Math.min(1.0, this.transitionProgress + (delta / this.weatherTransitionDuration));
         }
@@ -164,19 +164,44 @@ export class WeatherSystem {
 
         if (sunLight && sunLight.position) {
             sunLight.position.set(sunX, sunY, sunZ);
-        }
-
-        if (this.moonLight && this.moonLight.position) {
-            this.moonLight.position.set(-sunX, -sunY, -sunZ);
+            
+            if (sky && sky.material && sky.material.uniforms['sunPosition']) {
+                sky.material.uniforms['sunPosition'].value.copy(sunLight.position);
+            }
         }
 
         const daylightFactor = THREE.MathUtils.clamp((sunY + 20) / 100, 0.0, 1.0);
         const nightFactor = 1.0 - daylightFactor;
         const isNight = nightFactor > 0.5;
-        const currentEffects = this.getWeatherEffects();
-        const lightsOn = isNight || (this.currentWeather === 'storm' && currentEffects.rainOpacity > 0.3);
+        const effects = this.getWeatherEffects();
+        const lightsOn = isNight || (this.currentWeather === 'storm' && effects.rainOpacity > 0.3);
 
-        // --- Weather State Roll ---
+        if (this.moonLight && this.moonLight.position) {
+            const moonRad = THREE.MathUtils.degToRad(45.0);
+            const moonX = -sunX;
+            const moonY = Math.sin(moonRad) * orbitRadius;
+            const moonZ = -sunZ;
+            this.moonLight.position.set(moonX, moonY, moonZ);
+
+            this.moonLight.intensity = (effects.moonObjectIntensity * nightFactor);
+        }
+
+        // --- Sync Water Shader Direction & Weather-Based Ocean Moonlight Intensity ---
+        if (water && water.material && water.material.uniforms) {
+            if (water.material.uniforms['sunDirection']) {
+                if (isNight && this.moonLight) {
+                    water.material.uniforms['sunDirection'].value.copy(this.moonLight.position).normalize();
+                } else if (sunLight) {
+                    water.material.uniforms['sunDirection'].value.copy(sunLight.position).normalize();
+                }
+            }
+            if (water.material.uniforms['sunColor']) {
+                const daySunColor = new THREE.Color(0x336699);
+                const nightMoonColor = new THREE.Color(0x88ccff).multiplyScalar(effects.moonOceanIntensity * 0.1);
+                water.material.uniforms['sunColor'].value.copy(daySunColor.clone().lerp(nightMoonColor, nightFactor));
+            }
+        }
+
         this.transitionTimer += delta;
         if (this.transitionTimer >= this.targetDuration) {
             this.transitionTimer = 0.0;
@@ -184,14 +209,13 @@ export class WeatherSystem {
             this.rollNewWeather();
         }
 
-        // --- Storm Lightning Logic ---
         let lightningFactor = 0.0;
         if (this.currentWeather === 'storm' || (this.previousWeather === 'storm' && this.transitionProgress < 0.8)) {
             this.lightningTimer += delta;
             if (this.lightningTimer >= this.lightningInterval) {
                 this.lightningTimer = 0.0;
-                this.lightningInterval = 12.0 + Math.random() * 18.0; // 12 to 30 seconds apart
-                this.lightningFlashDuration = 0.18; // Brief flash duration
+                this.lightningInterval = 12.0 + Math.random() * 18.0;
+                this.lightningFlashDuration = 0.18;
             }
             if (this.lightningFlashDuration > 0) {
                 this.lightningFlashDuration -= delta;
@@ -202,8 +226,6 @@ export class WeatherSystem {
             this.lightningFlashDuration = 0.0;
         }
 
-        const effects = this.getWeatherEffects();
-
         this.windVector.lerp(this.targetWind, Math.min(delta * 0.2, 1.0));
 
         const targetFogHex = new THREE.Color(effects.dayFogColor).lerp(
@@ -211,7 +233,6 @@ export class WeatherSystem {
             nightFactor
         );
 
-        // Update Scene Fog & Background
         if (scene.fog && scene.fog.color) {
             const flashFogColor = targetFogHex.clone().addScalar(lightningFactor * 0.5);
             scene.fog.color.lerp(flashFogColor, Math.min(delta * 0.5, 1.0));
@@ -220,28 +241,12 @@ export class WeatherSystem {
             }
         }
 
-        if (scene.background && scene.background.isColor) {
-            const flashBgColor = targetFogHex.clone().addScalar(lightningFactor * 0.5);
-            scene.background.lerp(flashBgColor, Math.min(delta * 0.5, 1.0));
-        } else if (scene) {
-            scene.background = targetFogHex.clone();
-        }
-
-        // Sunlight Updates (with lightning spike)
         if (sunLight && sunLight.color) {
             const targetSunColor = new THREE.Color(effects.sunColor);
             sunLight.color.lerp(targetSunColor, Math.min(delta * 0.5, 1.0));
             sunLight.intensity = (effects.sunIntensity * daylightFactor) + (lightningFactor * 14.0);
         }
 
-        // Moonlight Updates
-        if (this.moonLight) {
-            const moonBaseIntensity = 0.12;
-            const stormFactor = (this.currentWeather === 'storm' ? 0.2 : 1.0);
-            this.moonLight.intensity = (moonBaseIntensity * nightFactor * stormFactor) + (lightningFactor * 4.0);
-        }
-
-        // Ambient Light Updates
         if (ambientLight && ambientLight.color) {
             const dayAmbient = new THREE.Color(0x888888);
             const nightAmbient = new THREE.Color(0x02040a);
@@ -250,21 +255,12 @@ export class WeatherSystem {
             ambientLight.intensity = THREE.MathUtils.lerp(1.2, 0.08, nightFactor) + (lightningFactor * 0.8);
         }
 
-        // --- Dynamic Scene Environment Adjustments (Water & Model Lights/Emissives) ---
+        // --- Dynamic Scene Adjustments (Water Night Factor & Model Lights) ---
         scene.traverse((child) => {
-            // 1. Sea Water Night Darkening & Reflection Adjustment
-            if (child.material && child.material.uniforms && child.material.uniforms.waterColor) {
-                const dayWaterColor = new THREE.Color(0x0044bb);
-                const nightWaterColor = new THREE.Color(0x000103);
-                child.material.uniforms.waterColor.value.copy(dayWaterColor.clone().lerp(nightWaterColor, nightFactor));
-                if (child.material.uniforms.sunColor) {
-                    const daySunColor = new THREE.Color(0x88ccff);
-                    const nightSunColor = new THREE.Color(0x112233);
-                    child.material.uniforms.sunColor.value.copy(daySunColor.clone().lerp(nightSunColor, nightFactor));
-                }
+            if (child.material && child.material.uniforms && child.material.uniforms.uNightFactor) {
+                child.material.uniforms.uNightFactor.value = nightFactor;
             }
 
-            // 2. Turn off Blender Model Emissive Materials During Daytime, On at Night or Storm
             if (child.isMesh && child.material) {
                 const mats = Array.isArray(child.material) ? child.material : [child.material];
                 mats.forEach(mat => {
@@ -277,7 +273,6 @@ export class WeatherSystem {
                 });
             }
 
-            // 3. Turn off Model Point/Spot Lights During Daytime, On at Night or Storm
             if ((child.isPointLight || child.isSpotLight) && child !== sunLight && child !== this.moonLight) {
                 if (child.userData.originalIntensity === undefined) {
                     child.userData.originalIntensity = child.intensity;
@@ -286,7 +281,7 @@ export class WeatherSystem {
             }
         });
 
-        // Rain Animation Updates & Smooth Opacity Blending
+        // Rain Animation Updates
         if (this.rainParticles && cameraPos) {
             if (effects.rainOpacity > 0.001) {
                 this.rainParticles.visible = true;
@@ -302,7 +297,6 @@ export class WeatherSystem {
 
             if (this.rainParticles.visible) {
                 this.rainParticles.position.set(cameraPos.x, cameraPos.y, cameraPos.z);
-
                 const positions = this.rainGeo.attributes.position.array;
                 const isStormActive = this.currentWeather === 'storm' || this.previousWeather === 'storm';
                 const windX = this.windVector.x * 0.08;
@@ -358,7 +352,7 @@ export class WeatherSystem {
         if (this.currentWeather === type) return;
         this.previousWeather = this.currentWeather;
         this.currentWeather = type;
-        this.transitionProgress = 0.0; // Reset transition for smooth blending
+        this.transitionProgress = 0.0;
 
         if (type === 'fine') {
             this.targetWind.set((Math.random() - 0.5) * 1.5, 0, (Math.random() - 0.5) * 1.5);
