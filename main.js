@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { setupScene } from './sceneSetup.js';
 import { WeatherSystem } from './weather.js';
@@ -346,8 +347,13 @@ const loadingManager = new THREE.LoadingManager(
 const dracoLoader = new DRACOLoader(loadingManager);
 dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
 
+const ktx2Loader = new KTX2Loader(loadingManager);
+ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
+ktx2Loader.detectSupport(renderer);
+
 const loader = new GLTFLoader(loadingManager);
 loader.setDRACOLoader(dracoLoader);
+loader.setKTX2Loader(ktx2Loader);
 loader.setMeshoptDecoder(MeshoptDecoder);
 
 function initializeGameAssets() {
@@ -680,7 +686,6 @@ function animate() {
 
             const targetCameraPos = helicopterPlayer.model.position.clone().add(new THREE.Vector3(offsetX, offsetY, offsetZ));
             
-            // Camera position is now directly copied (snapped) to eliminate smoothing lag and jitter
             camera.position.copy(targetCameraPos);
             camera.lookAt(helicopterPlayer.model.position);
         }

@@ -1,10 +1,7 @@
-/**
- * fishermanRescue.js
- * Fisherman rescue mission managing the burning fishing boat, water extinguishing, winch rescue, and dynamic SOS frequencies.
- */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 export class FishermanRescueMission {
@@ -164,6 +161,14 @@ export class FishermanRescueMission {
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
+
+        if (window.renderer) {
+            const ktx2Loader = new KTX2Loader(this.loadingManager);
+            ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
+            ktx2Loader.detectSupport(window.renderer);
+            loader.setKTX2Loader(ktx2Loader);
+        }
+
         loader.setMeshoptDecoder(MeshoptDecoder);
 
         loader.load('fishingboat.glb', (gltf) => {

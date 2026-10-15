@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { WinchSystem } from './winch.js';
 import { Survivor, SurvivorState } from './survivor.js';
@@ -77,7 +78,6 @@ export class RescueMission {
         this.statusDisplay = null;
         this._initUI();
         
-        // Light for liferaft.glb (Index 0)
         this.flashingLight = new THREE.PointLight(0xff5500, 0, 35);
         this.scene.add(this.flashingLight);
 
@@ -92,7 +92,6 @@ export class RescueMission {
         this.flashingMesh.visible = false;
         this.scene.add(this.flashingMesh);
 
-        // Separate light and half-size bulb for liferaft2.glb (Index 1)
         this.flashingLight2 = new THREE.PointLight(0xff5500, 0, 35);
         this.scene.add(this.flashingLight2);
 
@@ -285,6 +284,14 @@ export class RescueMission {
         const dracoLoader = new DRACOLoader(manager);
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
         loader.setDRACOLoader(dracoLoader);
+
+        if (window.renderer) {
+            const ktx2Loader = new KTX2Loader(manager);
+            ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
+            ktx2Loader.detectSupport(window.renderer);
+            loader.setKTX2Loader(ktx2Loader);
+        }
+
         loader.setMeshoptDecoder(MeshoptDecoder);
 
         const files = ['liferaft.glb', 'liferaft2.glb'];
@@ -569,13 +576,12 @@ export class RescueMission {
             const localHookPos = hookPos.clone();
             this.raftMesh.worldToLocal(localHookPos);
 
-            // Calibrated center points for liferaft.glb and liferaft2.glb
             const center = (this.currentRaftIndex === 1)
                 ? new THREE.Vector3(-0.6, 0.6, 0.4)
                 : new THREE.Vector3(0, 0.8, 1.3);
 
             const dist = localHookPos.distanceTo(center);
-            const catchRadius = 1.2; // Generous radius matching tuned box dimensions
+            const catchRadius = 1.2;
 
             if (dist <= catchRadius) {
                 this.survivorAttached = true;

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 export class WindFarm {
     constructor(scene, loadingManager) {
@@ -33,8 +35,16 @@ export class WindFarm {
         const dracoLoader = new DRACOLoader(loadingManager);
         dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
 
+        const ktx2Loader = new KTX2Loader(loadingManager);
+        ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
+        if (window.renderer) {
+            ktx2Loader.detectSupport(window.renderer);
+        }
+
         const loader = loadingManager ? new GLTFLoader(loadingManager) : new GLTFLoader();
         loader.setDRACOLoader(dracoLoader);
+        loader.setKTX2Loader(ktx2Loader);
+        loader.setMeshoptDecoder(MeshoptDecoder);
 
         loader.load('WTG.glb', (gltf) => {
             const baseModel = gltf.scene;
@@ -249,7 +259,6 @@ export class WindFarm {
         const turbine = this.turbines[index];
         const freq = turbine.frequency;
 
-        // Trigger pager notification popup matching rescue mission implementation
         const pagerEl = document.getElementById('rescue-pager-panel');
         const freqDisplay = document.getElementById('pager-freq');
         const statusDisplay = document.getElementById('pager-status');

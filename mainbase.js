@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
 
 export class MainBase {
     constructor(scene, loadingManager, onLoadedCallback) {
@@ -8,7 +9,6 @@ export class MainBase {
         this.group = new THREE.Group();
         this.scene.add(this.group);
 
-        // Updated spawn position for calibrated Y height (wheels on pad)
         this.helicopterSpawnPos = new THREE.Vector3(3.3690, 4.996, 0.4548);
         this.explicitSpawnPosition = this.helicopterSpawnPos;
         this.helipadCenter = new THREE.Vector3(this.explicitSpawnPosition.x, 4.996, this.explicitSpawnPosition.z);
@@ -26,18 +26,22 @@ export class MainBase {
         const loader = loadingManager ? new GLTFLoader(loadingManager) : new GLTFLoader();
         loader.setDRACOLoader(dracoLoader);
 
+        if (window.renderer) {
+            const ktx2Loader = new KTX2Loader(loadingManager);
+            ktx2Loader.setTranscoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/basis/');
+            ktx2Loader.detectSupport(window.renderer);
+            loader.setKTX2Loader(ktx2Loader);
+        }
+
         loader.load('mainbase.glb', (gltf) => {
             this.model = gltf.scene;
             this.model.position.set(0, 0, 0);
 
-            // Traverse the loaded model to disable/hide any original Blender lights or old bulbs
             this.model.traverse((child) => {
-                // Disable embedded Three.js light objects
                 if (child.isLight) {
                     child.intensity = 0;
                     child.visible = false;
                 }
-                // Hide old Blender light meshes / bulbs (matching typical naming conventions)
                 if (child.isMesh) {
                     const nameLower = child.name.toLowerCase();
                     if (
@@ -55,7 +59,6 @@ export class MainBase {
 
             this.group.add(this.model);
 
-            // Custom multi-box configuration for main base structure and platform deck
             const defaultBboxConfig = {
                 boxes: [
                     { offsetX: 0, offsetY: 1, offsetZ: 0, sizeX: 22, sizeY: 5, sizeZ: 20 },
@@ -88,12 +91,11 @@ export class MainBase {
         });
         const mesh = new THREE.Mesh(geo, mat);
         mesh.position.set(config.offsetX, config.offsetY, config.offsetZ);
-        mesh.visible = false; // Forced invisible to player
+        mesh.visible = false;
         return mesh;
     }
 
     applyBoundingBox(config, visible = false) {
-        // Clear existing bounding box meshes and dispose geometries
         this.bboxMeshes.forEach(mesh => {
             this.group.remove(mesh);
             mesh.geometry.dispose();
@@ -101,7 +103,6 @@ export class MainBase {
         });
         this.bboxMeshes = [];
 
-        // Support both single box configs and multi-box configs
         const boxes = config.boxes || [config];
         boxes.forEach(boxCfg => {
             const mesh = this.createBoundingBoxMesh(boxCfg, false);
@@ -114,7 +115,7 @@ export class MainBase {
 
     setBoundingBoxVisibility(visible) {
         this.bboxMeshes.forEach(mesh => {
-            mesh.visible = false; // Forced invisible
+            mesh.visible = false;
         });
     }
 
