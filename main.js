@@ -1,4 +1,3 @@
-// --- File: main.js ---
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -23,7 +22,6 @@ import { HelipadDebrisSystem } from './helipadDebrisSystem.js';
 import { DeveloperTool } from './utilities.js';
 import { RescueMission } from './rescueMission.js';
 import { FishermanRescueMission } from './fishermanRescue.js';
-import { FrigateRescueMission } from './frigaterescue.js';
 import { SearchLightSystem } from './searchlight.js';
 import { BuoySystem } from './buoy.js';
 import { Shark } from './shark.js';
@@ -55,7 +53,6 @@ let developerTool = null;
 let liferaftManager = null;
 let rescueMission = null;
 let fishermanRescueMission = null;
-let frigateRescueMission = null;
 let searchLightSystem = null;
 let buoySystem = null;
 let shark = null;
@@ -88,23 +85,8 @@ window.addEventListener('keydown', (e) => {
         helicopterPlayer.toggleLandingGear();
     }
     if (e.code === 'KeyX') {
-        // Global Winch Fallback Handler across active missions or free roam
-        const activeWinches = [];
-        if (rescueMission && rescueMission.winchSystem) activeWinches.push(rescueMission.winchSystem);
-        if (fishermanRescueMission && typeof fishermanRescueMission.toggleWinch === 'function') {
+        if (missionManager && missionManager.activeMissionType === 'fisherman' && fishermanRescueMission) {
             fishermanRescueMission.toggleWinch(helicopterPlayer);
-            return;
-        }
-        if (helicopterPlayer.winchSystem) activeWinches.push(helicopterPlayer.winchSystem);
-        if (window.rescueMission && window.rescueMission.winchSystem) activeWinches.push(window.rescueMission.winchSystem);
-
-        if (activeWinches.length > 0) {
-            const winch = activeWinches[0];
-            if (typeof winch.toggleWinch === 'function') {
-                winch.toggleWinch(helicopterPlayer);
-            } else if (typeof winch.toggle === 'function') {
-                winch.toggle(helicopterPlayer);
-            }
         } else if (rescueMission) {
             rescueMission.toggleWinch(helicopterPlayer);
         }
@@ -252,10 +234,6 @@ function respawnGame() {
         fishermanRescueMission.reset();
     }
 
-    if (frigateRescueMission && typeof frigateRescueMission.reset === 'function') {
-        frigateRescueMission.reset();
-    }
-
     if (sharkCatchSystem && shark) {
         sharkCatchSystem.reset(shark);
     }
@@ -311,10 +289,6 @@ const loadingManager = new THREE.LoadingManager(
             fishermanRescueMission.warmup(renderer, camera);
         }
 
-        if (frigateRescueMission && typeof frigateRescueMission.warmup === 'function') {
-            frigateRescueMission.warmup(renderer, camera);
-        }
-
         const extraModels = [
             shark ? shark.mesh : null,
             sharkCatchSystem ? sharkCatchSystem.caughtSharkMesh : null,
@@ -325,8 +299,7 @@ const loadingManager = new THREE.LoadingManager(
             rescueMission && rescueMission.survivor ? rescueMission.survivor.wavingMesh : null,
             fishermanRescueMission ? fishermanRescueMission.boatMesh : null,
             fishermanRescueMission && fishermanRescueMission.survivor1 ? fishermanRescueMission.survivor1.mesh : null,
-            fishermanRescueMission && fishermanRescueMission.survivor2 ? fishermanRescueMission.survivor2.mesh : null,
-            frigateRescueMission ? frigateRescueMission.frigateModel : null
+            fishermanRescueMission && fishermanRescueMission.survivor2 ? fishermanRescueMission.survivor2.mesh : null
         ];
 
         await new Promise((resolve) => setTimeout(resolve, 20));
@@ -391,10 +364,9 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 function initializeGameAssets() {
     liferaftManager = new LiferaftManager(scene, loadingManager);
     rescueMission = new RescueMission(scene, loadingManager, pager);
-    window.rescueMission = rescueMission;
+    window.rescueMission = rescueMission; // <--- Exposed globally for fishermanRescue module winch lookups
     
     fishermanRescueMission = new FishermanRescueMission(scene, loadingManager, mainBase, pager);
-    frigateRescueMission = new FrigateRescueMission(scene, loadingManager, mainBase);
     windFarm = new WindFarm(scene, loadingManager, pager);
     buoySystem = new BuoySystem(scene, loadingManager);
 
@@ -481,11 +453,6 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
 
     helicopterPlayer.rescueMission = rescueMission;
     helicopterPlayer.fishermanRescueMission = fishermanRescueMission;
-    helicopterPlayer.frigateRescueMission = frigateRescueMission;
-    // Bind fallback winch system directly to player for free-roam accessibility
-    if (rescueMission && rescueMission.winchSystem) {
-        helicopterPlayer.winchSystem = rescueMission.winchSystem;
-    }
 
     searchLightSystem = new SearchLightSystem(model, scene);
 
@@ -493,15 +460,7 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
 
     navIndicator = new NavIndicator(helicopterPlayer, navRadio, model, { x: -1.6, y: 3.95, z: 0.16 });
 
-    missionManager = new MissionManager(
-        scene, 
-        rescueMission, 
-        windFarm, 
-        fishermanRescueMission, 
-        navRadio, 
-        pager, 
-        frigateRescueMission
-    );
+    missionManager = new MissionManager(scene, rescueMission, windFarm, fishermanRescueMission, navRadio, pager);
 
     developerTool = new DeveloperTool(
         weatherSystem, 
@@ -513,8 +472,7 @@ function initGameAfterLoad(gltfHeli, spawnPosition) {
         rescueMission ? rescueMission.winchSystem : null, 
         scene, 
         rescueMission, 
-        sunLight,
-        missionManager
+        sunLight
     );
 
     if (camera && inputManager) {
@@ -659,54 +617,20 @@ function animate() {
         missionManager.update(delta, helicopterPlayer, mainBase, waterSystem);
     }
 
-    if (frigateRescueMission) {
-        frigateRescueMission.update(delta, helicopterPlayer, mainBase, waterSystem);
-    }
-
-    // Ensure the default winch system updates continuously every frame (including outside missions)
-    if (rescueMission && rescueMission.winchSystem && helicopterPlayer) {
-        rescueMission.winchSystem.update(delta, helicopterPlayer);
-    }
-
     if (searchLightSystem && helicopterPlayer) {
         searchLightSystem.update(delta, helicopterPlayer, weatherData, mainBase, windFarm, liferaftManager, rescueMission);
     }
 
-    const engineRunning = helicopterPlayer ? (helicopterPlayer.isEngineRunning || helicopterPlayer.enginePower > 0.01) : false;
-    const heliPos = helicopterPlayer && helicopterPlayer.model ? helicopterPlayer.model.position : new THREE.Vector3();
-    
-    const mainPadCenter = (mainBase && mainBase.helipadCenter) ? mainBase.helipadCenter : new THREE.Vector3(3.3690, 4.996, 0.4548);
-    const distToMainPad = new THREE.Vector2(heliPos.x, heliPos.z).distanceTo(new THREE.Vector2(mainPadCenter.x, mainPadCenter.z));
-    const isLandedOnMainPad = distToMainPad < 14.0 && Math.abs(heliPos.y - mainPadCenter.y) < 2.5;
-
-    let isLandedOnFrigatePad = false;
-    if (helicopterPlayer && helicopterPlayer.frigateRescueMission && typeof helicopterPlayer.frigateRescueMission.getCurrentGroundLevel === 'function') {
-        const frigateGround = helicopterPlayer.frigateRescueMission.getCurrentGroundLevel(heliPos.x, heliPos.z);
-        if (frigateGround !== null && Math.abs(heliPos.y - frigateGround) < 2.5) {
-            isLandedOnFrigatePad = true;
-        }
-    }
-
-    const isLandedOnAnyPad = isLandedOnMainPad || isLandedOnFrigatePad;
-
     if (waterSystem && helicopterPlayer) {
         const isDispensing = inputManager ? (inputManager.keys['Space'] || false) : false;
-        const isOverMainPadFly = distToMainPad < 12.0 && heliPos.y > 4.0;
-        const isOverFrigatePadFly = helicopterPlayer.frigateRescueMission && typeof helicopterPlayer.frigateRescueMission.isOverHelipad === 'function' && helicopterPlayer.frigateRescueMission.isOverHelipad(heliPos.x, heliPos.z);
-        const isOverAnyPadFly = isOverMainPadFly || isOverFrigatePadFly;
-
-        const actuallyDispensing = (engineRunning && !isOverAnyPadFly) ? waterSystem.update(delta, helicopterPlayer, isDispensing) : false;
+        const actuallyDispensing = waterSystem.update(delta, helicopterPlayer, isDispensing);
         if (soundManager) {
             soundManager.updateWaterSpraySound(actuallyDispensing);
         }
     }
 
     if (rotorWashSystem && helicopterPlayer) {
-        if (engineRunning && !isLandedOnAnyPad) {
-            rotorWashSystem.update(delta, helicopterPlayer);
-        } else if (typeof rotorWashSystem.clear === 'function') {
-            rotorWashSystem.clear();
-        }
+        rotorWashSystem.update(delta, helicopterPlayer);
     }
 
     if (shorelineFoamSystem) {

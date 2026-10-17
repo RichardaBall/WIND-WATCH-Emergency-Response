@@ -3,6 +3,40 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 
+function optimizeAndWarmUpGltf(gltfScene) {
+    const activeRenderer = window.renderer || null;
+    const activeCamera = window.camera || new THREE.PerspectiveCamera(60, 1, 0.1, 5000);
+
+    gltfScene.traverse((child) => {
+        if (child.isMesh) {
+            child.frustumCulled = false;
+            child.updateMatrixWorld(true);
+
+            if (child.material) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                materials.forEach(mat => {
+                    const mapKeys = ['map', 'roughnessMap', 'metalnessMap', 'normalMap', 'emissiveMap', 'aoMap', 'alphaMap'];
+                    mapKeys.forEach(key => {
+                        if (mat[key]) {
+                            mat[key].generateMipmaps = false;
+                            mat[key].minFilter = THREE.LinearFilter;
+                            mat[key].needsUpdate = true;
+                            if (activeRenderer && typeof activeRenderer.initTexture === 'function') {
+                                activeRenderer.initTexture(mat[key]);
+                            }
+                        }
+                    });
+                    mat.needsUpdate = true;
+                });
+            }
+        }
+    });
+
+    if (activeRenderer) {
+        activeRenderer.compile(gltfScene, activeCamera);
+    }
+}
+
 export class WinchSystem {
     constructor(scene, loadingManager = null) {
         this.scene = scene;
@@ -20,6 +54,7 @@ export class WinchSystem {
         this.maxOperatingSpeed = 25.0;
         this.cableSpeed = 12.0;
 
+        // Exposed properties for external systems (e.g. SharkCatchSystem)
         this.maxCableLength = 30.0;
         this.currentCableLength = 0.0;
         
@@ -68,6 +103,7 @@ export class WinchSystem {
             return;
         }
 
+        // Prevent lowering winch if water spray system is currently active / dispensing
         if (window.inputManager && window.inputManager.keys && window.inputManager.keys['Space']) {
             console.warn("Winch System: Cannot lower winch while water spray system is active.");
             return;
@@ -115,12 +151,14 @@ export class WinchSystem {
         if (!helicopterPlayer.isGearUp) {
             if (this.winchState === 'LOWERING' || this.winchState === 'DOWN') {
                 this.winchState = 'RAISING';
+                console.log("Winch System: Landing gear extended, automatically retracting winch...");
             }
         }
 
         if (currentSpeed > this.maxOperatingSpeed) {
             if (this.winchState === 'LOWERING' || this.winchState === 'DOWN') {
                 this.winchState = 'RAISING';
+                console.log(`Winch System: Airspeed (${currentSpeed.toFixed(1)} m/s) exceeded operating threshold (${this.maxOperatingSpeed.toFixed(1)} m/s), automatically retracting winch...`);
             }
         }
 
@@ -129,6 +167,7 @@ export class WinchSystem {
         mountOffset.applyQuaternion(helicopterPlayer.model.quaternion);
         const heliBottomPos = heliPos.clone().add(mountOffset);
         
+        // Calculate max extension to extend 2.0m into the water (Y <= 0) from heli bottom position
         const waterDepthMargin = 2.0;
         const maxExtension = Math.max(5.0, heliBottomPos.y + waterDepthMargin);
         this.maxCableLength = maxExtension;

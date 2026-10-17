@@ -1,4 +1,3 @@
-// --- File: rescueMission.js ---
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
@@ -178,6 +177,15 @@ export class RescueMission {
                 t.visible = false; 
             }
         });
+        if (this.survivor) {
+            if (this.survivor.mesh) this.survivor.mesh.visible = false;
+            if (this.survivor.raisingMesh) this.survivor.raisingMesh.visible = false;
+            if (this.survivor.walkingMesh) this.survivor.walkingMesh.visible = false;
+            if (this.survivor.wavingMesh) this.survivor.wavingMesh.visible = false;
+            if (typeof this.survivor.reset === 'function') {
+                this.survivor.reset();
+            }
+        }
         this.state = 'IDLE';
         this.survivorAttached = false;
         this.currentRaftIndex = null;
@@ -295,7 +303,7 @@ export class RescueMission {
 
         loader.setMeshoptDecoder(MeshoptDecoder);
 
-        files = ['liferaft.glb', 'liferaft2.glb'];
+        const files = ['liferaft.glb', 'liferaft2.glb'];
         let loadedCount = 0;
 
         files.forEach((file, index) => {
@@ -481,11 +489,9 @@ export class RescueMission {
     }
 
     toggleWinch(helicopterPlayer) {
-        if (this.winchSystem) {
-            this.winchSystem.toggleWinch(helicopterPlayer);
-            if (this.winchSystem.winchState === 'DOWN' && this.statusDisplay && this.state !== 'IDLE' && this.state !== 'COMPLETED' && this.state !== 'RESPAWN_WAIT') {
-                this.statusDisplay.textContent = `HOOK DOWN. HOVER`;
-            }
+        this.winchSystem.toggleWinch(helicopterPlayer);
+        if (this.winchSystem.winchState === 'DOWN' && this.statusDisplay && this.state !== 'IDLE' && this.state !== 'COMPLETED' && this.state !== 'RESPAWN_WAIT') {
+            this.statusDisplay.textContent = `HOOK DOWN. HOVER`;
         }
     }
 
