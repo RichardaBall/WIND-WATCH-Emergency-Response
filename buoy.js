@@ -61,15 +61,17 @@ export class BuoySystem {
                 for (let i = 0; i < this.config.count; i++) {
                     const buoyMesh = baseModel.clone(true);
 
-                    const light = new THREE.PointLight(0xffaa00, 1.5, 100);
+                    // Start light with 0 intensity so it's invisible until flash
+                    const light = new THREE.PointLight(0xffaa00, 0, 100);
                     const lightLocalPos = new THREE.Vector3(0, this.config.lightY, 0);
                     light.position.copy(lightLocalPos);
                     buoyMesh.add(light);
 
+                    // Start bulb material completely transparent (opacity 0)
                     const bulbMat = new THREE.MeshBasicMaterial({
                         color: 0xffaa00,
                         transparent: true,
-                        opacity: 0.35,
+                        opacity: 0.0,
                         fog: false,        
                         toneMapped: false  
                     });
@@ -176,8 +178,8 @@ export class BuoySystem {
                 buoy.bulbMat.color.setHex(0xffffff);
                 buoy.isActive = true;
             } else if (!shouldBeActive && buoy.isActive) {
-                buoy.light.intensity = 1.5;
-                buoy.bulbMat.opacity = 0.35;
+                buoy.light.intensity = 0;
+                buoy.bulbMat.opacity = 0.0;
                 buoy.bulbMat.color.setHex(0xffaa00);
                 buoy.isActive = false;
             }
