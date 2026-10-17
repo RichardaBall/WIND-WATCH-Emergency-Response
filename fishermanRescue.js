@@ -584,6 +584,15 @@ export class FishermanRescueMission {
             this.mainBase = mainBase;
         }
 
+        // Distance-based LOD calculation to throttle/pause expensive particle updates & animations when far away
+        let distanceToPlayer = 0;
+        if (player && player.model) {
+            const targetPos = this.boatModel && this.boatModel.visible ? this.boatModel.position : this.boatPosition;
+            distanceToPlayer = player.model.position.distanceTo(targetPos);
+        }
+        const isFarAway = distanceToPlayer > 800;
+        const isVeryFarAway = distanceToPlayer > 1500;
+
         if (this.searchlightTarget) {
             if (this.boatModel && this.boatModel.visible) {
                 this.searchlightTarget.position.copy(this.boatModel.position);
@@ -600,12 +609,16 @@ export class FishermanRescueMission {
             }
         }
 
-        if (this.boatMixer) this.boatMixer.update(delta);
-        if (this.peteraisingMixer) this.peteraisingMixer.update(delta);
-        if (this.raisingMixer) this.raisingMixer.update(delta);
-        if (this.petewavingbyeMixer) this.petewavingbyeMixer.update(delta);
+        // Skip animation mixing updates if very far away
+        if (!isVeryFarAway) {
+            if (this.boatMixer) this.boatMixer.update(delta);
+            if (this.peteraisingMixer) this.peteraisingMixer.update(delta);
+            if (this.raisingMixer) this.raisingMixer.update(delta);
+            if (this.petewavingbyeMixer) this.petewavingbyeMixer.update(delta);
+        }
 
-        if (this.hasActiveFire && this.fireParticleSystem && this.smokeParticleSystem) {
+        // Skip heavy particle simulation updates if player is far away
+        if (this.hasActiveFire && this.fireParticleSystem && this.smokeParticleSystem && !isFarAway) {
             this.fireParticleSystem.position.copy(this.fireOffset);
             this.smokeParticleSystem.position.copy(this.fireOffset);
 

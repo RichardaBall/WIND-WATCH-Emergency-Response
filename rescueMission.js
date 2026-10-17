@@ -500,17 +500,22 @@ export class RescueMission {
             this.mainBase = mainBase;
         }
 
+        // Distance-based LOD check to throttle animation mixer updates when far away
+        const heliPos = helicopterPlayer && helicopterPlayer.model ? helicopterPlayer.model.position : null;
+        let distToRaft = heliPos ? heliPos.distanceTo(this.raftPosition) : 0;
+        const isVeryFarAway = heliPos && distToRaft > 1500;
+
         if (this.winchSystem) {
             this.winchSystem.update(delta, helicopterPlayer);
         }
 
-        if (this.raftMixer) {
+        if (this.raftMixer && !isVeryFarAway) {
             this.raftMixer.update(delta);
         }
 
         const hookPos = this.winchSystem ? this.winchSystem.getHookPosition() : null;
 
-        if (this.survivor) {
+        if (this.survivor && !isVeryFarAway) {
             this.survivor.update(delta, hookPos);
         }
 
@@ -570,9 +575,6 @@ export class RescueMission {
         }
         
         if (!helicopterPlayer || !helicopterPlayer.model) return;
-        
-        const heliPos = helicopterPlayer.model.position;
-        const distToRaft = heliPos.distanceTo(this.raftPosition);
         
         if (this.state === 'ACTIVE' && distToRaft < 150) {
             this.state = 'ON_SCENE';

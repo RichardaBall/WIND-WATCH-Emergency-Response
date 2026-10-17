@@ -309,7 +309,13 @@ export class WindFarm {
                 hubWorldPos.y += 42.5;
             }
 
-            if (this.fireParticleSystem && this.smokeParticleSystem) {
+            // Distance-based check to skip heavy fire particle updates & water collision checks when far away
+            let isFarFromFire = false;
+            if (helicopterPosition) {
+                isFarFromFire = helicopterPosition.distanceToSquared(hubWorldPos) > (1200.0 * 1200.0);
+            }
+
+            if (this.fireParticleSystem && this.smokeParticleSystem && !isFarFromFire) {
                 this.fireParticleSystem.position.copy(hubWorldPos);
                 this.smokeParticleSystem.position.copy(hubWorldPos);
 
@@ -360,7 +366,7 @@ export class WindFarm {
                 this.smokeParticleGeo.attributes.position.needsUpdate = true;
             }
 
-            if (waterSystem && waterSystem.particleGeometry) {
+            if (waterSystem && waterSystem.particleGeometry && !isFarFromFire) {
                 const waterPosArr = waterSystem.particleGeometry.attributes.position.array;
                 const hitRadius = 2.0;
 
