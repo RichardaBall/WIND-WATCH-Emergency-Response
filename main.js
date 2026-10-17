@@ -85,6 +85,19 @@ window.addEventListener('keydown', (e) => {
         helicopterPlayer.toggleLandingGear();
     }
     if (e.code === 'KeyX') {
+        // Enforce Landing Gear Up requirement
+        if (!helicopterPlayer.isGearUp) {
+            console.warn("Cannot operate winch: Landing gear is down.");
+            return;
+        }
+        
+        // Enforce Mutual Exclusivity: cannot use winch if water is currently spraying (Space held)
+        const spacePressed = inputManager ? (inputManager.keys['Space'] || false) : false;
+        if (spacePressed) {
+            console.warn("Cannot operate winch: Water system is active.");
+            return;
+        }
+
         if (missionManager && missionManager.activeMissionType === 'fisherman' && fishermanRescueMission) {
             fishermanRescueMission.toggleWinch(helicopterPlayer);
         } else if (rescueMission) {
@@ -621,8 +634,27 @@ function animate() {
         searchLightSystem.update(delta, helicopterPlayer, weatherData, mainBase, windFarm, liferaftManager, rescueMission);
     }
 
+    // Global Winch Update so it works regardless of mission state
+    if (rescueMission && rescueMission.winchSystem && helicopterPlayer) {
+        rescueMission.winchSystem.update(delta, helicopterPlayer);
+    }
+
+    // Water System Update with Landing Gear & Mutual Exclusivity Rules
     if (waterSystem && helicopterPlayer) {
-        const isDispensing = inputManager ? (inputManager.keys['Space'] || false) : false;
+        const gearUp = helicopterPlayer.isGearUp;
+        
+        // Winch is active only if it's currently deployed or extending/retracting (not idle/retracted)
+        const winchSystem = rescueMission ? rescueMission.winchSystem : null;
+        const winchActive = winchSystem && (
+            winchSystem.winchHeight > 0.05 || 
+            (winchSystem.winchState && !['RETRACTED', 'IDLE', 'UP'].includes(winchSystem.winchState))
+        );
+        
+        const spacePressed = inputManager ? (inputManager.keys['Space'] || false) : false;
+
+        // Water only sprays if gear is UP, winch is NOT active, and Space is held down
+        const isDispensing = gearUp && !winchActive && spacePressed;
+
         const actuallyDispensing = waterSystem.update(delta, helicopterPlayer, isDispensing);
         if (soundManager) {
             soundManager.updateWaterSpraySound(actuallyDispensing);
