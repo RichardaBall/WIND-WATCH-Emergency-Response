@@ -177,6 +177,15 @@ export class RescueMission {
                 t.visible = false; 
             }
         });
+        if (this.survivor) {
+            if (this.survivor.mesh) this.survivor.mesh.visible = false;
+            if (this.survivor.raisingMesh) this.survivor.raisingMesh.visible = false;
+            if (this.survivor.walkingMesh) this.survivor.walkingMesh.visible = false;
+            if (this.survivor.wavingMesh) this.survivor.wavingMesh.visible = false;
+            if (typeof this.survivor.reset === 'function') {
+                this.survivor.reset();
+            }
+        }
         this.state = 'IDLE';
         this.survivorAttached = false;
         this.currentRaftIndex = null;

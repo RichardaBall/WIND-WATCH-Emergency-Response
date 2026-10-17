@@ -86,7 +86,7 @@ export class DeveloperTool {
                 <label style="display: block; text-align: center; color: #94a3b8; margin-bottom: 6px; font-size: 11px; text-transform: uppercase;">Weather Condition</label>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <button id="dev-btn-fine" style="background: #0ea5e9; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">☀ Fine Weather</button>
-                    <button id="dev-btn-rain" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">🌧️️ Rain</button>
+                    <button id="dev-btn-rain" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">🌧 Rain</button>
                     <button id="dev-btn-storm" style="background: #334155; border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; text-align: left; font-weight: bold;">⚡ Storm</button>
                 </div>
             </div>
@@ -104,6 +104,13 @@ export class DeveloperTool {
                 </div>
                 <div style="display: flex; gap: 6px;">
                     <button id="dev-fast-forward" style="flex: 1; background: #0284c7; border: none; color: white; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">⏩ Hold to Fast Forward (10x)</button>
+                </div>
+            </div>
+
+            <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; margin-bottom: 14px;">
+                <label style="display: block; text-align: center; color: #38bdf8; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; font-weight: bold;">Mission Control</label>
+                <div style="display: flex; gap: 6px;">
+                    <button id="dev-skip-mission" style="flex: 1; background: #0284c7; border: none; color: white; padding: 6px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;">⏭️ Skip & Next Mission</button>
                 </div>
             </div>
 
@@ -163,6 +170,10 @@ export class DeveloperTool {
             this.togglePause();
         });
 
+        document.getElementById('dev-skip-mission').addEventListener('click', () => {
+            this.skipAndNextMission();
+        });
+
         const ffBtn = document.getElementById('dev-fast-forward');
         if (ffBtn) {
             const startFF = (e) => {
@@ -182,6 +193,24 @@ export class DeveloperTool {
             window.addEventListener('mouseup', endFF);
             ffBtn.addEventListener('touchstart', startFF);
             window.addEventListener('touchend', endFF);
+        }
+    }
+
+    skipAndNextMission() {
+        const mm = window.missionManager;
+        if (mm) {
+            if (mm.rescueMission) mm.rescueMission.reset();
+            if (mm.windFarm) mm.windFarm.extinguishFire();
+            if (mm.fishermanRescueMission) mm.fishermanRescueMission.reset();
+            if (mm.pager) mm.pager.hide();
+            if (mm.activeMissionType) {
+                mm.lastMissionType = mm.activeMissionType;
+            }
+            mm.activeMissionType = null;
+            mm.startRandomMission();
+            console.log("[DeveloperTool] Skipped active mission and started next mission.");
+        } else {
+            console.warn("[DeveloperTool] MissionManager not found.");
         }
     }
 

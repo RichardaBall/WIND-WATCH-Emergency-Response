@@ -9,6 +9,7 @@ export class FishermanRescueMission {
         this.scene = scene;
         this.loadingManager = loadingManager;
         this.mainBase = mainBase;
+        this.player = null;
         
         this.state = 'IDLE'; 
 
@@ -488,6 +489,29 @@ export class FishermanRescueMission {
         }
     }
 
+    toggleWinch(player = null) {
+        if (player) {
+            this.player = player;
+        }
+        if (!this.player && window.player) {
+            this.player = window.player;
+        }
+        
+        const winch = (window.rescueMission && window.rescueMission.winchSystem) ||
+                      (this.player && this.player.winchSystem) ||
+                      (this.player && this.player.rescueMission && this.player.rescueMission.winchSystem);
+
+        if (winch) {
+            if (typeof winch.toggleWinch === 'function') {
+                winch.toggleWinch(this.player); 
+            } else if (typeof winch.toggle === 'function') {
+                winch.toggle(this.player);
+            }
+        } else {
+            console.warn("[FishermanRescueMission] Winch system not found.");
+        }
+    }
+
     reset() {
         this.state = 'IDLE';
         this.activeRescue = null;
@@ -543,6 +567,17 @@ export class FishermanRescueMission {
     }
 
     update(delta, player, mainBase, waterSystem = null) {
+        if (player) {
+            this.player = player;
+        }
+
+        // Always update the winch system regardless of mission state so it can be used anytime
+        const winch = (window.rescueMission && window.rescueMission.winchSystem) ||
+                      (player && (player.winchSystem || (player.rescueMission && player.rescueMission.winchSystem)));
+        if (winch && typeof winch.update === 'function') {
+            winch.update(delta, player);
+        }
+
         if (this.state === 'IDLE' || this.state === 'COMPLETED') return;
 
         if (mainBase && !this.mainBase) {
@@ -657,9 +692,7 @@ export class FishermanRescueMission {
             }
         }
 
-        const winch = player ? (player.winchSystem || (player.rescueMission ? player.rescueMission.winchSystem : null)) : null;
         if (!winch) return;
-
         const hookPos = winch.getHookWorldPosition ? winch.getHookWorldPosition() : (winch.getHookPosition ? winch.getHookPosition() : null);
         if (!hookPos) return;
 

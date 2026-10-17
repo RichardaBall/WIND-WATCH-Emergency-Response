@@ -14,7 +14,7 @@ export function createOcean(scene, sunLight) {
         waterColor: 0x001122,    
         distortionScale: 0.4,    
         positionY: -2.0,
-        waveHeight: 0.8,     
+        waveHeight: 0,     
         waveFrequency: 0.008, 
         waveSpeed: 0.7       
     };

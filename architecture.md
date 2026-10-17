@@ -91,3 +91,4 @@ A 3D offshore helicopter flight simulation game built using Three.js, WebGL, and
 5. **Ask for Missing Code**: If a requested feature requires modifying an existing file and I have not provided that file in the chat, ask me to paste it before generating updated code.
 6. **Scope Isolation & Zero Unrequested Changes**: Strictly no unprompted edits to working code, key bindings, or core flight mechanics. If a change impacts outside systems, you must explicitly notify me of the side effects before generating code.
 7. **Strict User Code Retention**: When a modification is requested for an existing module file, the AI MUST use the exact user-supplied source code as the baseline. The AI is strictly prohibited from substituting generic or placeholder class implementations when updating code, and must patch or integrate requested additions directly into the user's provided file structure.
+8. **Do not add citations to code**

@@ -1,4 +1,5 @@
-import * as THREE from 'three';
+import { GAME_CONFIG } from './config.js';
+import { StateMachine } from './stateMachine.js';
 
 export class MissionManager {
     constructor(scene, rescueMission, windFarm, fishermanRescueMission, navRadio, pager) {
@@ -9,122 +10,110 @@ export class MissionManager {
         this.navRadio = navRadio;
         this.pager = pager;
 
-        // Added 'fisherman' to the active mission pool rotation
         this.missionPool = ['rescue', 'windfarm', 'fisherman'];
-        this.activeMissionType = null; 
-        this.lastMissionType = null; // Tracks the previously played mission to prevent repetition
-        this.state = 'IDLE'; 
+        this.activeMissionType = null;
+        this.lastMissionType = null;
         this.cooldownTimer = 0;
-        this.initialDelayTimer = 5.0;
-        
+        this.initialDelayTimer = GAME_CONFIG.missions.initialDelay;
+
+        // Initialize FSM for Mission Manager
+        this.fsm = new StateMachine(this);
+        this._setupStates();
+        this.fsm.changeState('INITIAL_DELAY');
+
         window.missionManager = this;
     }
 
-    startRandomMission() {
-        if (this.activeMissionType !== null) return;
+    _setupStates() {
+        this.fsm.addState('INITIAL_DELAY', {
+            update: (ctx, delta) => {
+                ctx.initialDelayTimer -= delta;
+                if (ctx.initialDelayTimer <= 0) {
+                    ctx.fsm.changeState('IDLE');
+                }
+            }
+        })
+        .addState('IDLE', {
+            enter: (ctx) => {
+                ctx.startRandomMission();
+            }
+        })
+        .addState('ACTIVE', {
+            update: (ctx, delta, helicopterPlayer, mainBase, waterSystem) => {
+                // Delegate update to active mission module
+                if (ctx.activeMissionType === 'rescue' && ctx.rescueMission) {
+                    ctx.rescueMission.update(delta, helicopterPlayer, mainBase);
+                    if (['RESPAWN_WAIT', 'COMPLETED'].includes(ctx.rescueMission.state)) {
+                        ctx.fsm.changeState('COOLDOWN');
+                    }
+                } else if (ctx.activeMissionType === 'windfarm' && ctx.windFarm) {
+                    if (ctx.windFarm.activeFireIndex === -1) {
+                        ctx.fsm.changeState('COOLDOWN');
+                    }
+                } else if (ctx.activeMissionType === 'fisherman' && ctx.fishermanRescueMission) {
+                    ctx.fishermanRescueMission.update(delta, helicopterPlayer, mainBase, waterSystem);
+                    if (ctx.fishermanRescueMission.state === 'COMPLETED') {
+                        ctx.fsm.changeState('COOLDOWN');
+                    }
+                }
+            }
+        })
+        .addState('COOLDOWN', {
+            enter: (ctx) => {
+                if (ctx.activeMissionType) {
+                    ctx.lastMissionType = ctx.activeMissionType;
+                }
+                ctx.activeMissionType = null;
+                ctx.cooldownTimer = GAME_CONFIG.missions.cooldownDuration;
+                if (ctx.pager) ctx.pager.hide();
+            },
+            update: (ctx, delta) => {
+                ctx.cooldownTimer -= delta;
+                if (ctx.cooldownTimer <= 0) {
+                    ctx.fsm.changeState('IDLE');
+                }
+            }
+        });
+    }
 
-        // Filter out the last played mission so it cannot repeat twice in a row
+    startRandomMission() {
         let availableMissions = this.missionPool;
         if (this.lastMissionType !== null && this.missionPool.length > 1) {
             availableMissions = this.missionPool.filter(m => m !== this.lastMissionType);
         }
 
-        console.log(`[MissionManager] Last mission was: ${this.lastMissionType}. Available pool:`, availableMissions);
-
         const randomIndex = Math.floor(Math.random() * availableMissions.length);
         this.activeMissionType = availableMissions[randomIndex];
-        this.state = 'ACTIVE';
 
-        console.log(`[MissionManager] Spawning mission type: ${this.activeMissionType}`);
+        console.log(`[MissionManager] Spawning mission: ${this.activeMissionType}`);
 
-        if (this.activeMissionType === 'rescue') {
-            if (this.rescueMission && typeof this.rescueMission.startMission === 'function') {
-                this.rescueMission.startMission();
-            }
-        } else if (this.activeMissionType === 'windfarm') {
-            if (this.windFarm && typeof this.windFarm.spawnRandomFire === 'function') {
-                this.windFarm.spawnRandomFire();
-            }
-        } else if (this.activeMissionType === 'fisherman') {
-            if (this.fishermanRescueMission && typeof this.fishermanRescueMission.startMission === 'function') {
-                this.fishermanRescueMission.startMission();
-            }
+        if (this.activeMissionType === 'rescue' && this.rescueMission) {
+            this.rescueMission.startMission();
+        } else if (this.activeMissionType === 'windfarm' && this.windFarm) {
+            this.windFarm.spawnRandomFire();
+        } else if (this.activeMissionType === 'fisherman' && this.fishermanRescueMission) {
+            this.fishermanRescueMission.startMission();
         }
-    }
 
-    triggerCooldown() {
-        if (this.activeMissionType) {
-            this.lastMissionType = this.activeMissionType;
-        }
-        this.activeMissionType = null;
-        this.state = 'COOLDOWN';
-        this.cooldownTimer = 10.0;
-        if (this.pager) this.pager.hide();
-        console.log(`[MissionManager] Mission completed. Last mission set to: ${this.lastMissionType}. Starting 10-second cooldown...`);
+        this.fsm.changeState('ACTIVE');
     }
 
     handleCrash() {
-        console.log('[MissionManager] Crash detected. Clearing active mission and starting cooldown.');
+        console.log('[MissionManager] Crash detected. Resetting active missions.');
         if (this.activeMissionType) {
             this.lastMissionType = this.activeMissionType;
         }
         this.activeMissionType = null;
-        this.state = 'COOLDOWN';
-        this.cooldownTimer = 10.0;
 
-        if (this.rescueMission && typeof this.rescueMission.reset === 'function') {
-            this.rescueMission.reset();
-        }
-        if (this.windFarm && typeof this.windFarm.extinguishFire === 'function') {
-            this.windFarm.extinguishFire();
-        }
-        if (this.fishermanRescueMission && typeof this.fishermanRescueMission.reset === 'function') {
-            this.fishermanRescueMission.reset();
-        }
-        if (this.pager) {
-            this.pager.hide();
-        }
+        if (this.rescueMission) this.rescueMission.reset();
+        if (this.windFarm) this.windFarm.extinguishFire();
+        if (this.fishermanRescueMission) this.fishermanRescueMission.reset();
+        if (this.pager) this.pager.hide();
+
+        this.fsm.changeState('COOLDOWN');
     }
 
     update(delta, helicopterPlayer, mainBase, waterSystem) {
-        if (this.initialDelayTimer > 0) {
-            this.initialDelayTimer -= delta;
-            if (this.initialDelayTimer <= 0) {
-                this.startRandomMission();
-            }
-            return;
-        }
-
-        if (this.state === 'COOLDOWN') {
-            this.cooldownTimer -= delta;
-            if (this.cooldownTimer <= 0) {
-                this.state = 'IDLE';
-                this.startRandomMission();
-            }
-            return;
-        }
-
-        if (this.state === 'ACTIVE') {
-            if (this.activeMissionType === 'rescue') {
-                if (this.rescueMission && (this.rescueMission.state === 'RESPAWN_WAIT' || this.rescueMission.state === 'COMPLETED')) {
-                    this.triggerCooldown();
-                }
-            } else if (this.activeMissionType === 'windfarm') {
-                if (this.windFarm && this.windFarm.activeFireIndex === -1) {
-                    this.triggerCooldown();
-                }
-            } else if (this.activeMissionType === 'fisherman') {
-                if (this.fishermanRescueMission && this.fishermanRescueMission.state === 'COMPLETED') {
-                    this.triggerCooldown();
-                }
-            }
-        }
-
-        if (this.rescueMission && helicopterPlayer) {
-            this.rescueMission.update(delta, helicopterPlayer, mainBase);
-        }
-        if (this.fishermanRescueMission && helicopterPlayer) {
-            this.fishermanRescueMission.update(delta, helicopterPlayer, mainBase, waterSystem);
-        }
+        this.fsm.update(delta, helicopterPlayer, mainBase, waterSystem);
     }
 }

@@ -85,16 +85,15 @@ window.addEventListener('keydown', (e) => {
         helicopterPlayer.toggleLandingGear();
     }
     if (e.code === 'KeyX') {
-        if (rescueMission) {
-            rescueMission.toggleWinch(helicopterPlayer);
-        }
-        if (fishermanRescueMission) {
+        if (missionManager && missionManager.activeMissionType === 'fisherman' && fishermanRescueMission) {
             fishermanRescueMission.toggleWinch(helicopterPlayer);
+        } else if (rescueMission) {
+            rescueMission.toggleWinch(helicopterPlayer);
         }
     }
 });
 
-window.addEventListener('DOMContentLoaded', () => {
+function initDOM() {
     const loadGameBtn = document.getElementById('load-game-btn');
     const startScreen = document.getElementById('start-screen');
     const loadingScreen = document.getElementById('loading-screen');
@@ -182,7 +181,13 @@ window.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initDOM);
+} else {
+    initDOM();
+}
 
 let loadedGltfHeli = null;
 let loadedSpawnPosition = null;
@@ -359,6 +364,8 @@ loader.setMeshoptDecoder(MeshoptDecoder);
 function initializeGameAssets() {
     liferaftManager = new LiferaftManager(scene, loadingManager);
     rescueMission = new RescueMission(scene, loadingManager, pager);
+    window.rescueMission = rescueMission; // <--- Exposed globally for fishermanRescue module winch lookups
+    
     fishermanRescueMission = new FishermanRescueMission(scene, loadingManager, mainBase, pager);
     windFarm = new WindFarm(scene, loadingManager, pager);
     buoySystem = new BuoySystem(scene, loadingManager);
