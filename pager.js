@@ -85,7 +85,7 @@ export class Pager {
                 const isOn = Math.sin(this.flashTimer * 7) > 0;
                 this.setLed(isOn);
             }
-        }, 80);
+        }, 500);
     }
 
     showMission(title, callType, frequencyKHz, statusText) {
