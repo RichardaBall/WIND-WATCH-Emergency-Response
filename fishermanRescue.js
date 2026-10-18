@@ -80,56 +80,8 @@ export class FishermanRescueMission {
         this.searchlightTarget = new THREE.Object3D();
         this.scene.add(this.searchlightTarget);
 
-        this._initUI();
         this._setupBoatLights();
         this._loadAssets();
-    }
-
-    _initUI() {
-        const div = document.createElement('div');
-        div.id = 'fisherman-pager-panel';
-        div.style.cssText = `
-            position: fixed;
-            bottom: 193px;
-            right: 20px;
-            width: 170px;
-            background: linear-gradient(135deg, #282a2d, #191a1c);
-            border: 2px solid #3a3d42;
-            border-radius: 5px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08);
-            font-family: 'Courier New', Courier, monospace;
-            color: #d1d5db;
-            padding: 10px;
-            z-index: 10000;
-            display: none;
-            user-select: none;
-            pointer-events: auto;
-        `;
-
-        div.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 2px;">
-                <div style="font-size: 8px; font-weight: bold; color: #ff3333; letter-spacing: 1px;">PAGER [SOS]</div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 7px; color: #888;">SOS</span>
-                    <div id="fisherman-pager-led" style="width: 7px; height: 7px; background-color: #ff3333; border-radius: 50%; box-shadow: 0 0 5px #ff3333; border: 1px solid #500;"></div>
-                </div>
-            </div>
-            <div style="background: #111215; border: 1px inset #2a2d32; border-radius: 3px; padding: 8px; text-align: center;">
-                <div style="font-size: 7px; color: #9ca3af; letter-spacing: 0.5px; margin-bottom: 2px;">FISHING BOAT SOS</div>
-                <div id="fisherman-pager-freq" style="font-size: 15px; font-weight: bold; color: #ff3333; text-shadow: 0 0 6px rgba(255,51,51,0.6); letter-spacing: 1px;">310.0 kHz</div>
-            </div>
-            <div style="margin-top: 8px; font-size: 7px; color: #9ca3af; text-align: center; line-height: 1.3;">
-                <div id="fisherman-pager-status">EXTINGUISH FIRE</div>
-            </div>
-        `;
-        document.body.appendChild(div);
-        this.pagerElement = div;
-        this.freqDisplay = div.querySelector('#fisherman-pager-freq');
-        this.statusDisplay = div.querySelector('#fisherman-pager-status');
-
-        ['wheel', 'mousedown', 'mouseup', 'click', 'pointerdown'].forEach(eventType => {
-            div.addEventListener(eventType, (e) => e.stopPropagation());
-        });
     }
 
     _setupBoatLights() {
@@ -457,10 +409,8 @@ export class FishermanRescueMission {
             };
         }
 
-        if (this.pagerElement && this.statusDisplay && this.freqDisplay) {
-            this.freqDisplay.textContent = `${this.rescueFreq.toFixed(1)} kHz`;
-            this.statusDisplay.textContent = `EXTINGUISH FIRE`;
-            this.pagerElement.style.display = 'block';
+        if (window.pager) {
+            window.pager.showMission('PAGER [SOS]', 'DISTRESS CALL', this.rescueFreq, 'BOAT');
         }
     }
 
@@ -484,8 +434,8 @@ export class FishermanRescueMission {
         this.hasActiveFire = false;
         if (this.fireParticleSystem) this.fireParticleSystem.visible = false;
         if (this.smokeParticleSystem) this.smokeParticleSystem.visible = false;
-        if (this.statusDisplay) {
-            this.statusDisplay.textContent = `RESCUE PETE & PETE`;
+        if (window.pager) {
+            window.pager.setStatus('BOAT');
         }
     }
 
@@ -521,8 +471,8 @@ export class FishermanRescueMission {
         this.hasActiveFire = true;
         this.currentWaterHits = 0;
 
-        if (this.pagerElement) {
-            this.pagerElement.style.display = 'none';
+        if (window.pager) {
+            window.pager.hide();
         }
         if (this.fireParticleSystem) this.fireParticleSystem.visible = true;
         if (this.smokeParticleSystem) this.smokeParticleSystem.visible = true;
@@ -571,20 +521,20 @@ export class FishermanRescueMission {
             this.player = player;
         }
 
-        // Always update the winch system regardless of mission state so it can be used anytime
         const winch = (window.rescueMission && window.rescueMission.winchSystem) ||
                       (player && (player.winchSystem || (player.rescueMission && player.rescueMission.winchSystem)));
         if (winch && typeof winch.update === 'function') {
             winch.update(delta, player);
         }
 
-        if (this.state === 'IDLE' || this.state === 'COMPLETED') return;
+        if (this.state === 'IDLE' || this.state === 'COMPLETED') {
+            return;
+        }
 
         if (mainBase && !this.mainBase) {
             this.mainBase = mainBase;
         }
 
-        // Distance-based LOD calculation to throttle/pause expensive particle updates & animations when far away
         let distanceToPlayer = 0;
         if (player && player.model) {
             const targetPos = this.boatModel && this.boatModel.visible ? this.boatModel.position : this.boatPosition;
@@ -609,7 +559,6 @@ export class FishermanRescueMission {
             }
         }
 
-        // Skip animation mixing updates if very far away
         if (!isVeryFarAway) {
             if (this.boatMixer) this.boatMixer.update(delta);
             if (this.peteraisingMixer) this.peteraisingMixer.update(delta);
@@ -617,7 +566,6 @@ export class FishermanRescueMission {
             if (this.petewavingbyeMixer) this.petewavingbyeMixer.update(delta);
         }
 
-        // Skip heavy particle simulation updates if player is far away
         if (this.hasActiveFire && this.fireParticleSystem && this.smokeParticleSystem && !isFarAway) {
             this.fireParticleSystem.position.copy(this.fireOffset);
             this.smokeParticleSystem.position.copy(this.fireOffset);
@@ -740,12 +688,12 @@ export class FishermanRescueMission {
                     this.rescuedCount++;
                     
                     if (this.rescuedCount >= 2) {
-                        if (this.pagerElement) this.pagerElement.style.display = 'none';
+                        if (window.pager) window.pager.hide();
                         if (window.navRadio && window.navRadio.stations && window.navRadio.stations[this.rescueFreq]) {
                             delete window.navRadio.stations[this.rescueFreq];
                         }
-                    } else if (this.statusDisplay) {
-                        this.statusDisplay.textContent = `RESCUE NEXT PETE`;
+                    } else if (window.pager) {
+                        window.pager.setStatus('BOAT');
                     }
                     return;
                 }
@@ -788,8 +736,8 @@ export class FishermanRescueMission {
                 this.rescuedCount = 2;
                 if (this.peteraisingModel) this.peteraisingModel.visible = false;
                 if (this.raisingModel) this.raisingModel.visible = false;
-                if (this.pagerElement) {
-                    this.pagerElement.style.display = 'none';
+                if (window.pager) {
+                    window.pager.hide();
                 }
                 if (window.navRadio && window.navRadio.stations && window.navRadio.stations[this.rescueFreq]) {
                     delete window.navRadio.stations[this.rescueFreq];

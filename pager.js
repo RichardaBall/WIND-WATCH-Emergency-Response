@@ -6,9 +6,11 @@ export class Pager {
         this.titleEl = null;
         this.callTypeEl = null;
         this.ledEl = null;
+        this.flashTimer = 0;
+        
         this.createElement();
+        this.startFlashLoop();
 
-        // Expose globally for other systems
         window.pager = this;
     }
 
@@ -74,6 +76,16 @@ export class Pager {
         ['wheel', 'mousedown', 'mouseup', 'click', 'pointerdown'].forEach(eventType => {
             this.container.addEventListener(eventType, (e) => e.stopPropagation());
         });
+    }
+
+    startFlashLoop() {
+        setInterval(() => {
+            if (this.isVisible) {
+                this.flashTimer += 0.3;
+                const isOn = Math.sin(this.flashTimer * 7) > 0;
+                this.setLed(isOn);
+            }
+        }, 80);
     }
 
     showMission(title, callType, frequencyKHz, statusText) {

@@ -73,11 +73,6 @@ export class RescueMission {
         
         this.survivorAttached = false;
         
-        this.pagerElement = null;
-        this.freqDisplay = null;
-        this.statusDisplay = null;
-        this._initUI();
-        
         this.flashingLight = new THREE.PointLight(0xff5500, 0, 35);
         this.scene.add(this.flashingLight);
 
@@ -193,7 +188,9 @@ export class RescueMission {
         if (this.flashingMesh) this.flashingMesh.visible = false;
         if (this.flashingLight2) this.flashingLight2.intensity = 0;
         if (this.flashingMesh2) this.flashingMesh2.visible = false;
-        if (this.pagerElement) this.pagerElement.style.display = 'none';
+        if (window.pager) {
+            window.pager.hide();
+        }
     }
 
     _hideRaftSurvivor(raftMesh) {
@@ -336,60 +333,6 @@ export class RescueMission {
         });
     }
 
-    _initUI() {
-        const div = document.createElement('div');
-        div.id = 'rescue-pager-panel';
-        div.style.cssText = `
-            position: fixed;
-            bottom: 193px;
-            right: 20px;
-            width: 170px;
-            background: linear-gradient(135deg, #282a2d, #191a1c);
-            border: 2px solid #3a3d42;
-            border-radius: 5px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.08);
-            font-family: 'Courier New', Courier, monospace;
-            color: #d1d5db;
-            padding: 10px;
-            z-index: 10000;
-            display: none;
-            user-select: none;
-            pointer-events: auto;
-        `;
-
-        div.innerHTML = `
-            <div style="position: absolute; top: 4px; left: 6px; font-size: 7px; color: #555; font-weight: bold;">⊗</div>
-            <div style="position: absolute; top: 4px; right: 6px; font-size: 7px; color: #555; font-weight: bold;">⊗</div>
-            <div style="position: absolute; bottom: 4px; left: 6px; font-size: 7px; color: #555; font-weight: bold;">⊗</div>
-            <div style="position: absolute; bottom: 4px; right: 6px; font-size: 7px; color: #555; font-weight: bold;">⊗</div>
-
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 0 2px;">
-                <div style="font-size: 8px; font-weight: bold; color: #ff3333; letter-spacing: 1px;" id="pager-title">PAGER [SOS]</div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 7px; color: #888;">ALERT</span>
-                    <div id="pager-led" style="width: 7px; height: 7px; background-color: #ff3333; border-radius: 50%; box-shadow: 0 0 5px #ff3333; border: 1px solid #500;"></div>
-                </div>
-            </div>
-
-            <div style="background: #111215; border: 1px inset #2a2d32; border-radius: 3px; padding: 8px; text-align: center;">
-                <div style="font-size: 7px; color: #9ca3af; letter-spacing: 0.5px; margin-bottom: 2px;" id="pager-call-type">DISTRESS CALL</div>
-                <div id="pager-freq" style="font-size: 15px; font-weight: bold; color: #ff3333; text-shadow: 0 0 6px rgba(255,51,51,0.6); letter-spacing: 1px;">---.- kHz</div>
-            </div>
-
-            <div style="margin-top: 8px; font-size: 7px; color: #9ca3af; text-align: center; line-height: 1.3;">
-                <div id="pager-status">SEARCHING...</div>
-            </div>
-        `;
-        document.body.appendChild(div);
-        this.pagerElement = div;
-        this.freqDisplay = div.querySelector('#pager-freq');
-        this.statusDisplay = div.querySelector('#pager-status');
-
-        ['wheel', 'mousedown', 'mouseup', 'click', 'pointerdown'].forEach(eventType => {
-            div.addEventListener(eventType, (e) => e.stopPropagation());
-        });
-    }
-
     startMission() {
         if (this.state !== 'IDLE') return;
         
@@ -420,14 +363,8 @@ export class RescueMission {
             };
         }
 
-        if (this.pagerElement && this.freqDisplay && this.statusDisplay) {
-            const titleEl = this.pagerElement.querySelector('#pager-title');
-            const callTypeEl = this.pagerElement.querySelector('#pager-call-type');
-            if (titleEl) titleEl.textContent = 'PAGER [SOS]';
-            if (callTypeEl) callTypeEl.textContent = 'DISTRESS CALL';
-            this.freqDisplay.textContent = `${this.rescueFreq.toFixed(1)} kHz`;
-            this.statusDisplay.textContent = `NAV TO RAFT`;
-            this.pagerElement.style.display = 'block';
+        if (window.pager) {
+            window.pager.showMission('PAGER [SOS]', 'DISTRESS CALL', this.rescueFreq, 'RAFT');
         }
 
         this._selectRaft(false);
@@ -490,8 +427,8 @@ export class RescueMission {
 
     toggleWinch(helicopterPlayer) {
         this.winchSystem.toggleWinch(helicopterPlayer);
-        if (this.winchSystem.winchState === 'DOWN' && this.statusDisplay && this.state !== 'IDLE' && this.state !== 'COMPLETED' && this.state !== 'RESPAWN_WAIT') {
-            this.statusDisplay.textContent = `HOOK DOWN. HOVER`;
+        if (this.winchSystem.winchState === 'DOWN' && window.pager && this.state !== 'IDLE' && this.state !== 'COMPLETED' && this.state !== 'RESPAWN_WAIT') {
+            window.pager.setStatus('RAFT');
         }
     }
 
@@ -500,7 +437,6 @@ export class RescueMission {
             this.mainBase = mainBase;
         }
 
-        // Distance-based LOD check to throttle animation mixer updates when far away
         const heliPos = helicopterPlayer && helicopterPlayer.model ? helicopterPlayer.model.position : null;
         let distToRaft = heliPos ? heliPos.distanceTo(this.raftPosition) : 0;
         const isVeryFarAway = heliPos && distToRaft > 1500;
@@ -531,13 +467,6 @@ export class RescueMission {
         }
 
         if (this.state === 'IDLE' || this.state === 'RESPAWN_WAIT' || this.state === 'COMPLETED') {
-            if (this.pagerElement) {
-                const led = this.pagerElement.querySelector('#pager-led');
-                if (led) {
-                    led.style.backgroundColor = '#550000';
-                    led.style.boxShadow = 'none';
-                }
-            }
             return;
         }
 
@@ -564,22 +493,13 @@ export class RescueMission {
             if (this.flashingLight2) this.flashingLight2.intensity = 0;
             if (this.flashingMesh2) this.flashingMesh2.visible = false;
         }
-
-        if (this.pagerElement && this.pagerElement.style.display === 'block') {
-            const led = this.pagerElement.querySelector('#pager-led');
-            if (led) {
-                const isOn = flash === 1;
-                led.style.backgroundColor = isOn ? '#ff3333' : '#550000';
-                led.style.boxShadow = isOn ? '0 0 5px #ff3333' : 'none';
-            }
-        }
         
         if (!helicopterPlayer || !helicopterPlayer.model) return;
         
         if (this.state === 'ACTIVE' && distToRaft < 150) {
             this.state = 'ON_SCENE';
-            if (this.statusDisplay) {
-                this.statusDisplay.textContent = `SIGHTED. HOVER & [X]`;
+            if (window.pager) {
+                window.pager.setStatus('RAFT');
             }
         }
         
@@ -597,8 +517,8 @@ export class RescueMission {
             if (dist <= catchRadius) {
                 this.survivorAttached = true;
                 this.state = 'WINCHING';
-                if (this.statusDisplay) {
-                    this.statusDisplay.textContent = `HOOKED! RETRACT WINCH`;
+                if (window.pager) {
+                    window.pager.setStatus('RAFT');
                 }
                 if (this.flashingLight) this.flashingLight.intensity = 0;
                 if (this.flashingMesh) this.flashingMesh.visible = false;
@@ -616,11 +536,8 @@ export class RescueMission {
             const winchRetracted = this.winchSystem.winchHeight <= 0.15 || this.winchSystem.winchState === 'UP' || this.winchSystem.winchState === 'RETRACTED';
             if (winchRetracted) {
                 this.state = 'RETURNING';
-                if (this.statusDisplay) {
-                    this.statusDisplay.textContent = `SURVIVOR ONBOARD! RETURN BASE`;
-                }
-                if (this.pagerElement) {
-                    this.pagerElement.style.display = 'none';
+                if (window.pager) {
+                    window.pager.hide();
                 }
                 if (this.survivor) {
                     this.survivor.enterCabin();
@@ -655,7 +572,7 @@ export class RescueMission {
 
         if (this.state === 'DISEMBARKING' && this.survivor && this.survivor.currentState === SurvivorState.COMPLETED) {
             this.state = 'RESPAWN_WAIT';
-            if (this.pagerElement) this.pagerElement.style.display = 'none';
+            if (window.pager) window.pager.hide();
         }
     }
 }

@@ -259,18 +259,8 @@ export class WindFarm {
         const turbine = this.turbines[index];
         const freq = turbine.frequency;
 
-        const pagerEl = document.getElementById('rescue-pager-panel');
-        const freqDisplay = document.getElementById('pager-freq');
-        const statusDisplay = document.getElementById('pager-status');
-        const titleEl = document.getElementById('pager-title');
-        const callTypeEl = document.getElementById('pager-call-type');
-
-        if (pagerEl && freqDisplay && statusDisplay) {
-            if (titleEl) titleEl.textContent = 'PAGER [WTG FIRE]';
-            if (callTypeEl) callTypeEl.textContent = `WTG #${index + 1} ALARM`;
-            freqDisplay.textContent = `${freq.toFixed(1)} kHz`;
-            statusDisplay.textContent = `WTG FIRE! EXTINGUISH`;
-            pagerEl.style.display = 'block';
+        if (window.pager) {
+            window.pager.showMission('PAGER [SOS]', 'DISTRESS CALL', freq, 'WTG');
         }
 
         console.log(`[WindFarm] WTG #${index + 1} fire started! Navigation frequency: ${freq} kHz`);
@@ -285,9 +275,8 @@ export class WindFarm {
         if (this.fireParticleSystem) this.fireParticleSystem.visible = false;
         if (this.smokeParticleSystem) this.smokeParticleSystem.visible = false;
 
-        const pagerEl = document.getElementById('rescue-pager-panel');
-        if (pagerEl) {
-            pagerEl.style.display = 'none';
+        if (window.pager) {
+            window.pager.hide();
         }
     }
 
@@ -298,102 +287,102 @@ export class WindFarm {
             this.scene.userData.activeFireIndex = this.activeFireIndex;
         }
 
-        if (this.activeFireIndex !== -1 && this.turbines[this.activeFireIndex]) {
+        if (this.activeFireIndex !== -1) {
             const turbine = this.turbines[this.activeFireIndex];
-            const hubWorldPos = new THREE.Vector3();
-            
-            if (turbine.rotor) {
-                turbine.rotor.getWorldPosition(hubWorldPos);
-            } else {
-                turbine.group.getWorldPosition(hubWorldPos);
-                hubWorldPos.y += 42.5;
-            }
-
-            // Distance-based check to skip heavy fire particle updates & water collision checks when far away
-            let isFarFromFire = false;
-            if (helicopterPosition) {
-                isFarFromFire = helicopterPosition.distanceToSquared(hubWorldPos) > (1200.0 * 1200.0);
-            }
-
-            if (this.fireParticleSystem && this.smokeParticleSystem && !isFarFromFire) {
-                this.fireParticleSystem.position.copy(hubWorldPos);
-                this.smokeParticleSystem.position.copy(hubWorldPos);
-
-                const firePosArr = this.fireParticleGeo.attributes.position.array;
-                for (let i = 0; i < this.fireParticlesCount; i++) {
-                    const idx = i * 3;
-                    const age = this.fireLifetimes[i];
-                    
-                    const waveX = Math.sin(firePosArr[idx + 1] * 0.3 + age * 5.0) * 0.8;
-                    const waveZ = Math.cos(firePosArr[idx + 1] * 0.3 + age * 5.0) * 0.8;
-
-                    firePosArr[idx] += (this.fireVelocities[idx] + waveX) * delta;
-                    firePosArr[idx + 1] += this.fireVelocities[idx + 1] * delta;
-                    firePosArr[idx + 2] += (this.fireVelocities[idx + 2] + waveZ) * delta;
-
-                    this.fireLifetimes[i] += delta;
-
-                    if (this.fireLifetimes[i] >= this.fireMaxLifetimes[i] || firePosArr[idx + 1] > 20.0) {
-                        firePosArr[idx] = (Math.random() - 0.5) * 2.5;
-                        firePosArr[idx + 1] = (Math.random() - 0.5) * 1.0;
-                        firePosArr[idx + 2] = (Math.random() - 0.5) * 2.5;
-                        this.fireLifetimes[i] = 0;
-                    }
+            if (turbine) {
+                const hubWorldPos = new THREE.Vector3();
+                if (turbine.rotor) {
+                    turbine.rotor.getWorldPosition(hubWorldPos);
+                } else {
+                    turbine.group.getWorldPosition(hubWorldPos);
+                    hubWorldPos.y += 42.5;
                 }
-                this.fireParticleGeo.attributes.position.needsUpdate = true;
 
-                const smokePosArr = this.smokeParticleGeo.attributes.position.array;
-                for (let i = 0; i < this.smokeParticlesCount; i++) {
-                    const idx = i * 3;
-                    const age = this.smokeLifetimes[i];
-
-                    const rollX = Math.sin(smokePosArr[idx + 1] * 0.2 + age * 3.0) * 1.2;
-                    const rollZ = Math.cos(smokePosArr[idx + 1] * 0.2 + age * 3.0) * 1.2;
-
-                    smokePosArr[idx] += (this.smokeVelocities[idx] + rollX) * delta;
-                    smokePosArr[idx + 1] += this.smokeVelocities[idx + 1] * delta;
-                    smokePosArr[idx + 2] += (this.smokeVelocities[idx + 2] + rollZ) * delta;
-
-                    this.smokeLifetimes[i] += delta;
-
-                    if (this.smokeLifetimes[i] >= this.smokeMaxLifetimes[i] || smokePosArr[idx + 1] > 45.0) {
-                        smokePosArr[idx] = (Math.random() - 0.5) * 3.5;
-                        smokePosArr[idx + 1] = 2.0 + Math.random() * 3.0;
-                        smokePosArr[idx + 2] = (Math.random() - 0.5) * 3.5;
-                        this.smokeLifetimes[i] = 0;
-                    }
+                let isFarFromFire = false;
+                if (helicopterPosition) {
+                    isFarFromFire = helicopterPosition.distanceToSquared(hubWorldPos) > (1200.0 * 1200.0);
                 }
-                this.smokeParticleGeo.attributes.position.needsUpdate = true;
-            }
 
-            if (waterSystem && waterSystem.particleGeometry && !isFarFromFire) {
-                const waterPosArr = waterSystem.particleGeometry.attributes.position.array;
-                const hitRadius = 2.0;
+                if (this.fireParticleSystem && this.smokeParticleSystem && !isFarFromFire) {
+                    this.fireParticleSystem.position.copy(hubWorldPos);
+                    this.smokeParticleSystem.position.copy(hubWorldPos);
 
-                for (let p = 0; p < waterSystem.particlesCount; p++) {
-                    const pIdx = p * 3;
-                    const wy = waterPosArr[pIdx + 1];
-                    if (wy > -4000) {
-                        const wx = waterPosArr[pIdx];
-                        const wz = waterPosArr[pIdx + 2];
-                        const dx = wx - hubWorldPos.x;
-                        const dy = wy - hubWorldPos.y;
-                        const dz = wz - hubWorldPos.z;
-                        const distSq = dx * dx + dy * dy + dz * dz;
+                    const firePosArr = this.fireParticleGeo.attributes.position.array;
+                    for (let i = 0; i < this.fireParticlesCount; i++) {
+                        const idx = i * 3;
+                        const age = this.fireLifetimes[i];
+                        
+                        const waveX = Math.sin(firePosArr[idx + 1] * 0.3 + age * 5.0) * 0.8;
+                        const waveZ = Math.cos(firePosArr[idx + 1] * 0.3 + age * 5.0) * 0.8;
 
-                        if (distSq < hitRadius * hitRadius) {
-                            this.currentWaterHits++;
-                            waterPosArr[pIdx + 1] = -5000;
-                            waterSystem.lifetimes[p] = 0;
+                        firePosArr[idx] += (this.fireVelocities[idx] + waveX) * delta;
+                        firePosArr[idx + 1] += this.fireVelocities[idx + 1] * delta;
+                        firePosArr[idx + 2] += (this.fireVelocities[idx + 2] + waveZ) * delta;
 
-                            if (this.currentWaterHits >= this.waterHitsRequired) {
-                                this.extinguishFire();
-                                break;
+                        this.fireLifetimes[i] += delta;
+
+                        if (this.fireLifetimes[i] >= this.fireMaxLifetimes[i] || firePosArr[idx + 1] > 20.0) {
+                            firePosArr[idx] = (Math.random() - 0.5) * 2.5;
+                            firePosArr[idx + 1] = (Math.random() - 0.5) * 1.0;
+                            firePosArr[idx + 2] = (Math.random() - 0.5) * 2.5;
+                            this.fireLifetimes[i] = 0;
+                        }
+                    }
+                    this.fireParticleGeo.attributes.position.needsUpdate = true;
+
+                    const smokePosArr = this.smokeParticleGeo.attributes.position.array;
+                    for (let i = 0; i < this.smokeParticlesCount; i++) {
+                        const idx = i * 3;
+                        const age = this.smokeLifetimes[i];
+
+                        const rollX = Math.sin(smokePosArr[idx + 1] * 0.2 + age * 3.0) * 1.2;
+                        const rollZ = Math.cos(smokePosArr[idx + 1] * 0.2 + age * 3.0) * 1.2;
+
+                        smokePosArr[idx] += (this.smokeVelocities[idx] + rollX) * delta;
+                        smokePosArr[idx + 1] += this.smokeVelocities[idx + 1] * delta;
+                        smokePosArr[idx + 2] += (this.smokeVelocities[idx + 2] + rollZ) * delta;
+
+                        this.smokeLifetimes[i] += delta;
+
+                        if (this.smokeLifetimes[i] >= this.smokeMaxLifetimes[i] || smokePosArr[idx + 1] > 45.0) {
+                            smokePosArr[idx] = (Math.random() - 0.5) * 3.5;
+                            smokePosArr[idx + 1] = 2.0 + Math.random() * 3.0;
+                            smokePosArr[idx + 2] = (Math.random() - 0.5) * 3.5;
+                            this.smokeLifetimes[i] = 0;
+                        }
+                    }
+                    this.smokeParticleGeo.attributes.position.needsUpdate = true;
+                }
+
+                if (waterSystem && waterSystem.particleGeometry && !isFarFromFire) {
+                    const waterPosArr = waterSystem.particleGeometry.attributes.position.array;
+                    const hitRadius = 2.0;
+
+                    for (let p = 0; p < waterSystem.particlesCount; p++) {
+                        const pIdx = p * 3;
+                        const wy = waterPosArr[pIdx + 1];
+                        if (wy > -4000) {
+                            const wx = waterPosArr[pIdx];
+                            const wz = waterPosArr[pIdx + 2];
+                            const dx = wx - hubWorldPos.x;
+                            const dy = wy - hubWorldPos.y;
+                            const dz = wz - hubWorldPos.z;
+                            const distSq = dx * dx + dy * dy + dz * dz;
+
+                            if (distSq < hitRadius * hitRadius) {
+                                this.currentWaterHits++;
+                                waterPosArr[pIdx + 1] = -5000;
+                                waterSystem.lifetimes[p] = 0;
+
+                                if (this.currentWaterHits >= this.waterHitsRequired) {
+                                    this.extinguishFire();
+                                    break;
+                                }
                             }
                         }
                     }
+                    waterSystem.particleGeometry.attributes.position.needsUpdate = true;
                 }
-                waterSystem.particleGeometry.attributes.position.needsUpdate = true;
             }
         }
 
